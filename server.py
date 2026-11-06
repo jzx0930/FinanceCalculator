@@ -43,7 +43,7 @@ def normalize_symbols(raw: str):
 
 def _fetch_one(symbol: str):
     """向 Yahoo 抓單一代碼,成功回傳 dict,失敗回傳 None。"""
-    path = "/v8/finance/chart/" + urllib.parse.quote(symbol) + "?range=1y&interval=1d"
+    path = "/v8/finance/chart/" + urllib.parse.quote(symbol) + "?range=5y&interval=1d"
     for host in YAHOO_HOSTS:
         url = "https://" + host + path
         try:
@@ -59,20 +59,30 @@ def _fetch_one(symbol: str):
             price = meta.get("regularMarketPrice")
             if price is None:
                 continue
-            high52 = meta.get("fiftyTwoWeekHigh")
-            if not high52:   # 後備:由近一年日線最高價推算
-                highs = []
-                for q in result.get("indicators", {}).get("quote", [{}]):
-                    highs = [h for h in (q.get("high") or []) if h is not None]
-                high52 = max(highs) if highs else None
-            if not high52:
-                continue
+            ts = result.get("timestamp") or []
+            highs_raw = []
+            for q in result.get("indicators", {}).get("quote", [{}]):
+                highs_raw = q.get("high") or []
+                break
+            # 對齊時間與高點,濾掉缺漏日
+            ts_out, hi_out = [], []
+            for t, h in zip(ts, highs_raw):
+                if t is not None and h is not None:
+                    ts_out.append(int(t))
+                    hi_out.append(round(float(h), 4))
+            if not hi_out:   # 後備:至少給 52 週高點
+                h52 = meta.get("fiftyTwoWeekHigh")
+                if not h52:
+                    continue
+                ts_out = [int(meta.get("regularMarketTime") or 0)]
+                hi_out = [float(h52)]
             return {
                 "symbol": meta.get("symbol", symbol),
                 "price": float(price),
-                "high52w": float(high52),
                 "currency": meta.get("currency", ""),
                 "exchange": meta.get("exchangeName", ""),
+                "ts": ts_out,
+                "highs": hi_out,
             }
         except (KeyError, IndexError, TypeError, ValueError):
             continue
@@ -86,9 +96,7 @@ def get_quote(raw_symbol: str):
     for sym in tried:
         q = _fetch_one(sym)
         if q:
-            drop = (q["high52w"] - q["price"]) / q["high52w"] * 100.0
-            q["dropPct"] = round(max(drop, 0.0), 2)
-            q["ok"] = True
+            q["ok"] = True   # 高點/跌幅由前端依所選期間計算
             return q
     return {"ok": False,
             "error": "查不到此代碼的股價(試過:%s)。請確認代碼,或檢查網路。"

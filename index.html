@@ -27,7 +27,11 @@
          padding:10px 18px;font-size:15px;font-weight:700;cursor:pointer}
   button.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);font-weight:600}
   button:active{transform:translateY(1px)}
-  .chk{display:flex;align-items:center;gap:7px;margin-top:12px;color:var(--mut);font-size:13px;cursor:pointer}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .chip{background:#0e1620;border:1px solid var(--line);color:var(--mut);border-radius:999px;
+        padding:6px 13px;font-size:13px;cursor:pointer;font-weight:600}
+  .chip.on{background:var(--accent);color:#04121f;border-color:var(--accent)}
+  .chk{display:flex;align-items:center;gap:7px;margin-top:14px;color:var(--mut);font-size:13px;cursor:pointer}
   .chk input{width:auto}
   .quote{display:flex;gap:26px;flex-wrap:wrap;align-items:baseline}
   .quote .big{font-size:30px;font-weight:800}
@@ -68,7 +72,7 @@
 <body>
 <div class="wrap">
   <h1>小跌小買・大跌大買</h1>
-  <div class="sub">以「距52週高點的跌幅」決定投入資金比例 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
+  <div class="sub">以「距所選期間高點的跌幅」決定投入資金比例 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
 
   <div class="card">
     <div class="row">
@@ -85,10 +89,15 @@
       </div>
     </div>
 
-    <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路，最穩定)</label>
+    <div id="rangeWrap" style="margin-top:14px">
+      <label>高點基準期間(點選,可隨時切換,不需重新查詢)</label>
+      <div class="chips" id="rangeRow"></div>
+    </div>
+
+    <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路,最穩定)</label>
     <div id="manualBox" class="row hide" style="margin-top:10px">
       <div><label>現價</label><input id="mPrice" type="number" min="0" step="0.01" placeholder="例如 900"></div>
-      <div><label>52週高點</label><input id="mHigh" type="number" min="0" step="0.01" placeholder="例如 1200"></div>
+      <div><label>高點</label><input id="mHigh" type="number" min="0" step="0.01" placeholder="例如 1200"></div>
     </div>
 
     <div id="msg" class="err" style="margin-top:10px"></div>
@@ -98,7 +107,7 @@
     <div class="quote">
       <div class="q"><span class="k">代碼</span><span class="v" id="qSym">—</span></div>
       <div class="q"><span class="k">現價</span><span class="v big" id="qPrice">—</span></div>
-      <div class="q"><span class="k">52週高點</span><span class="v" id="qHigh">—</span></div>
+      <div class="q"><span class="k" id="qHighKey">期間高點</span><span class="v" id="qHigh">—</span></div>
       <div class="q"><span class="k">目前跌幅</span><span class="v big drop" id="qDrop">—</span></div>
       <div class="q"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
@@ -118,7 +127,7 @@
   <div class="card">
     <label style="font-size:14px;color:var(--fg)">加碼級距表(可直接修改,自動存於本機)</label>
     <div class="muted" style="font-size:12px;margin-bottom:6px">
-      「跌幅≥」= 距52週高點跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
+      「跌幅≥」= 距所選期間高點跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
     </div>
     <table id="tierTable">
       <thead>
@@ -151,14 +160,16 @@
 
 <script>
 const DEFAULT_TIERS = [[5,5],[10,10],[15,15],[20,20],[25,20],[30,30]];
-const LS = "xdxm_state_v1";
+const RANGES = [["1m","近1月",30],["3m","近3月",91],["6m","近6月",182],
+                ["1y","近1年",365],["2y","近2年",730],["5y","近5年",1e9]];
+const LS = "xdxm_state_v2";
 let state = loadState();
-let lastQuote = null;
+let lastData = null;   // 原始序列 {symbol,price,currency,exchange,ts[],highs[]}
+let lastQuote = null;  // 依所選期間算出的 {price,highRef,dropPct,rangeLabel,...}
 
-// 若從本機伺服器(start.bat)開啟,優先用它;否則走公開 CORS 代理
 const HAS_SERVER = location.protocol==="http:" &&
                    (location.hostname==="127.0.0.1"||location.hostname==="localhost");
-const YQ = s => "https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(s)+"?range=1y&interval=1d";
+const YQ = s => "https://query1.finance.yahoo.com/v8/finance/chart/"+encodeURIComponent(s)+"?range=5y&interval=1d";
 const PROXIES = [
   u => "https://api.allorigins.win/raw?url="+encodeURIComponent(u),
   u => "https://corsproxy.io/?url="+encodeURIComponent(u),
@@ -167,7 +178,7 @@ const PROXIES = [
 
 function loadState(){
   try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&s.tiers) return s; }catch(e){}
-  return {tiers: DEFAULT_TIERS.map(r=>r.slice()), capital:"", symbol:""};
+  return {tiers: DEFAULT_TIERS.map(r=>r.slice()), capital:"", symbol:"", range:"1y"};
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
 
@@ -187,15 +198,18 @@ function parseYahoo(data, sym){
   try{
     const res=data.chart.result[0], meta=res.meta;
     const price=meta.regularMarketPrice; if(price==null) return null;
-    let high=meta.fiftyTwoWeekHigh;
-    if(!high){ const hs=(res.indicators.quote[0].high||[]).filter(x=>x!=null);
-               high=hs.length?Math.max.apply(null,hs):null; }
-    if(!high) return null;
-    return {symbol:meta.symbol||sym, price:+price, high52w:+high,
-            currency:meta.currency||"", exchange:meta.exchangeName||""};
+    const ts=res.timestamp||[];
+    const highsRaw=(res.indicators&&res.indicators.quote&&res.indicators.quote[0].high)||[];
+    const t=[],h=[];
+    for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&highsRaw[i]!=null){ t.push(ts[i]); h.push(+highsRaw[i]); } }
+    if(!h.length){ const h52=meta.fiftyTwoWeekHigh; if(!h52) return null;
+                   return {symbol:meta.symbol||sym,price:+price,currency:meta.currency||"",
+                           exchange:meta.exchangeName||"",ts:[meta.regularMarketTime||0],highs:[+h52]}; }
+    return {symbol:meta.symbol||sym, price:+price, currency:meta.currency||"",
+            exchange:meta.exchangeName||"", ts:t, highs:h};
   }catch(e){ return null; }
 }
-async function getQuote(raw){
+async function getData(raw){
   if(HAS_SERVER){
     try{ const j=await (await fetch("/api/quote?symbol="+encodeURIComponent(raw))).json();
          if(j&&j.ok) return j; }catch(e){}
@@ -205,13 +219,28 @@ async function getQuote(raw){
       try{
         const r=await fetch(prox(YQ(sym)),{cache:"no-store"});
         if(!r.ok) continue;
-        const data=JSON.parse(await r.text());
-        const q=parseYahoo(data,sym);
-        if(q){ q.dropPct=Math.max(0,r2((q.high52w-q.price)/q.high52w*100)); q.ok=true; return q; }
+        const d=JSON.parse(await r.text());
+        const q=parseYahoo(d,sym);
+        if(q&&q.highs&&q.highs.length) return Object.assign({ok:true},q);
       }catch(e){}
     }
   }
   return {ok:false,error:"自動抓價失敗(可能代理服務忙碌或代碼有誤)。已可改用「手動輸入股價」。"};
+}
+
+// 依所選期間算出高點與跌幅
+function computeQuote(){
+  if(!lastData) return;
+  const rr = RANGES.find(x=>x[0]===state.range) || RANGES[3];
+  const cutoff = Date.now()/1000 - rr[2]*86400;
+  let hi=null;
+  for(let i=0;i<lastData.highs.length;i++){
+    if(lastData.ts[i]>=cutoff){ const h=lastData.highs[i]; if(hi==null||h>hi) hi=h; }
+  }
+  if(hi==null) hi=Math.max.apply(null,lastData.highs);  // 窗內無資料 → 用全部
+  const drop=Math.max(0, r2((hi-lastData.price)/hi*100));
+  lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
+             exchange:lastData.exchange, highRef:hi, dropPct:drop, rangeLabel:rr[1]};
 }
 
 function sortedTiers(){
@@ -311,26 +340,42 @@ function showQuote(){
   $("quoteCard").classList.remove("hide");
   $("qSym").textContent=lastQuote.symbol;
   $("qPrice").textContent=fmt(lastQuote.price,2)+" "+(lastQuote.currency||"");
-  $("qHigh").textContent=fmt(lastQuote.high52w,2)+" "+(lastQuote.currency||"");
+  $("qHighKey").textContent="高點("+lastQuote.rangeLabel+")";
+  $("qHigh").textContent=fmt(lastQuote.highRef,2)+" "+(lastQuote.currency||"");
   $("qDrop").textContent="-"+lastQuote.dropPct+"%";
   $("qMeta").textContent=(lastQuote.exchange||"")+(lastQuote.currency?" ・ "+lastQuote.currency:"");
+}
+
+function renderRangeChips(){
+  const box=$("rangeRow"); box.innerHTML="";
+  RANGES.forEach(r=>{
+    const b=document.createElement("button");
+    b.className="chip"+(state.range===r[0]?" on":"");
+    b.textContent=r[1];
+    b.addEventListener("click",()=>{
+      state.range=r[0]; saveState(); renderRangeChips();
+      if(lastData && !$("manual").checked){ computeQuote(); showQuote(); renderAll(); }
+    });
+    box.appendChild(b);
+  });
 }
 
 function setManual(on){
   $("manual").checked=on;
   $("manualBox").classList.toggle("hide",!on);
+  $("rangeWrap").classList.toggle("hide",on);  // 手動時高點就是你填的,不需期間
 }
 
 async function query(){
   $("msg").textContent="";
-  const capital=$("capital").value;
-  state.capital=capital; state.symbol=$("symbol").value.trim(); saveState();
+  state.capital=$("capital").value; state.symbol=$("symbol").value.trim(); saveState();
 
   if($("manual").checked){
     const p=parseFloat($("mPrice").value), h=parseFloat($("mHigh").value);
-    if(!(p>0&&h>0)){ $("msg").textContent="請輸入有效的現價與52週高點。"; return; }
-    lastQuote={symbol:($("symbol").value.trim()||"手動"),price:p,high52w:h,currency:"",
-               exchange:"手動輸入",dropPct:Math.max(0,r2((h-p)/h*100)),ok:true};
+    if(!(p>0&&h>0)){ $("msg").textContent="請輸入有效的現價與高點。"; return; }
+    lastData=null;
+    lastQuote={symbol:($("symbol").value.trim()||"手動"),price:p,currency:"",exchange:"手動輸入",
+               highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),rangeLabel:"手動"};
     showQuote(); renderAll(); return;
   }
 
@@ -338,13 +383,13 @@ async function query(){
   if(!sym){ $("msg").textContent="請先輸入股票代碼,或勾選手動輸入。"; return; }
   $("go").disabled=true; $("go").textContent="查詢中…";
   try{
-    const j=await getQuote(sym);
-    if(!j.ok){
-      lastQuote=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
-      $("msg").textContent=j.error||"查詢失敗。"; setManual(true);
-      return;
-    }
-    lastQuote=j; showQuote(); renderAll();
+    const j=await getData(sym);
+    if(!j.ok){ lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
+               $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return; }
+    lastData={symbol:j.symbol,price:+j.price,currency:j.currency||"",exchange:j.exchange||"",
+              ts:j.ts||[],highs:(j.highs||[]).map(Number)};
+    if(!lastData.highs.length){ $("msg").textContent="抓到資料但缺少歷史高點,請改用手動輸入。"; setManual(true); return; }
+    computeQuote(); showQuote(); renderAll();
   }finally{
     $("go").disabled=false; $("go").textContent="查詢並試算";
   }
@@ -353,6 +398,8 @@ async function query(){
 // 初始化
 $("symbol").value=state.symbol||"";
 $("capital").value=state.capital||"";
+if(!state.range) state.range="1y";
+renderRangeChips();
 $("go").addEventListener("click",query);
 $("manual").addEventListener("change",e=>setManual(e.target.checked));
 ["symbol","capital","mPrice","mHigh"].forEach(id=>
