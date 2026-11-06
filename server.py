@@ -3,7 +3,8 @@
 只用 Python 標準函式庫,不需安裝任何套件。
 職責:
   1. 提供網頁儀表板 (index.html)。
-  2. /api/quote?symbol=XXX  向 Yahoo 財經抓「現價」與「52週高點」。
+  2. /api/quote?symbol=XXX  向 Yahoo 財經抓「現價」與「每日收盤價序列」
+     (高點 = 期間內最高收盤價,由前端依所選期間計算)。
      - 台股:輸入 4~6 位數字(如 2330),自動嘗試 .TW(上市)→ .TWO(上櫃)。
      - 美股:直接輸入代碼(如 AAPL、VOO)。
      - 也可自行輸入完整代碼(如 2330.TW、BRK-B)。
@@ -60,29 +61,26 @@ def _fetch_one(symbol: str):
             if price is None:
                 continue
             ts = result.get("timestamp") or []
-            highs_raw = []
+            closes_raw = []
             for q in result.get("indicators", {}).get("quote", [{}]):
-                highs_raw = q.get("high") or []
+                closes_raw = q.get("close") or []
                 break
-            # 對齊時間與高點,濾掉缺漏日
-            ts_out, hi_out = [], []
-            for t, h in zip(ts, highs_raw):
-                if t is not None and h is not None:
+            # 對齊時間與「收盤價」,濾掉缺漏日
+            ts_out, cl_out = [], []
+            for t, c in zip(ts, closes_raw):
+                if t is not None and c is not None:
                     ts_out.append(int(t))
-                    hi_out.append(round(float(h), 4))
-            if not hi_out:   # 後備:至少給 52 週高點
-                h52 = meta.get("fiftyTwoWeekHigh")
-                if not h52:
-                    continue
+                    cl_out.append(round(float(c), 4))
+            if not cl_out:   # 後備:至少給目前價一筆
                 ts_out = [int(meta.get("regularMarketTime") or 0)]
-                hi_out = [float(h52)]
+                cl_out = [float(price)]
             return {
                 "symbol": meta.get("symbol", symbol),
                 "price": float(price),
                 "currency": meta.get("currency", ""),
                 "exchange": meta.get("exchangeName", ""),
                 "ts": ts_out,
-                "highs": hi_out,
+                "closes": cl_out,
             }
         except (KeyError, IndexError, TypeError, ValueError):
             continue

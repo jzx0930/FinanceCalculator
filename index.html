@@ -72,7 +72,7 @@
 <body>
 <div class="wrap">
   <h1>小跌小買・大跌大買</h1>
-  <div class="sub">以「距所選期間高點的跌幅」決定投入資金比例 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
+  <div class="sub">以「距所選期間最高收盤價的跌幅」決定投入資金比例 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
 
   <div class="card">
     <div class="row">
@@ -107,7 +107,7 @@
     <div class="quote">
       <div class="q"><span class="k">代碼</span><span class="v" id="qSym">—</span></div>
       <div class="q"><span class="k">現價</span><span class="v big" id="qPrice">—</span></div>
-      <div class="q"><span class="k" id="qHighKey">期間高點</span><span class="v" id="qHigh">—</span></div>
+      <div class="q"><span class="k" id="qHighKey">收盤高點</span><span class="v" id="qHigh">—</span></div>
       <div class="q"><span class="k">目前跌幅</span><span class="v big drop" id="qDrop">—</span></div>
       <div class="q"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
@@ -127,7 +127,7 @@
   <div class="card">
     <label style="font-size:14px;color:var(--fg)">加碼級距表(可直接修改,自動存於本機)</label>
     <div class="muted" style="font-size:12px;margin-bottom:6px">
-      「跌幅≥」= 距所選期間高點跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
+      「跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
     </div>
     <table id="tierTable">
       <thead>
@@ -159,12 +159,28 @@
 </div>
 
 <script>
+/* ──────────────────────────────────────────────────────────────
+   運算原理(小跌小買・大跌大買)
+   1. 取股價:代碼正規化(台股數字 → .TW 上市 / .TWO 上櫃;美股原樣),
+      抓 Yahoo 近 5 年日線,得到 現價、每日收盤價序列 closes[]、對應時間 ts[]。
+   2. 基準高點 H:依所選期間 N 天,取「ts 在 (現在 − N 天) 之後」的收盤價最大值。
+      期間越長 → 納入越早的高點 → H 可能越高。
+   3. 跌幅:dropPct = max(0, (H − 現價) / H × 100)。(創新高時為 0,不會是負)
+   4. 對照級距:級距表 = [跌幅門檻, 單筆投入%] 陣列。
+      目前階 = 門檻 ≤ dropPct 的「最深」一階。
+      此階金額 = 總資金 × 該階%;股數 = floor(金額 / 現價)。
+      累計應投入% = 所有門檻 ≤ dropPct 的投入% 相加;累計金額 = 總資金 × 累計%。
+      剩餘資金 = 總資金 − 累計金額。
+   5. 換期間 / 改級距 / 改資金,都是用同一份已抓資料「即時重算」,不重新連線。
+   註:高點採「最高收盤價」(非盤中最高);原始收盤未還原權息,遇除權息或分割可能偏差。
+      本工具為自訂規則試算,非投資建議。
+   ────────────────────────────────────────────────────────────── */
 const DEFAULT_TIERS = [[5,5],[10,10],[15,15],[20,20],[25,20],[30,30]];
 const RANGES = [["1m","近1月",30],["3m","近3月",91],["6m","近6月",182],
                 ["1y","近1年",365],["2y","近2年",730],["5y","近5年",1e9]];
 const LS = "xdxm_state_v2";
 let state = loadState();
-let lastData = null;   // 原始序列 {symbol,price,currency,exchange,ts[],highs[]}
+let lastData = null;   // 原始序列 {symbol,price,currency,exchange,ts[],closes[]}
 let lastQuote = null;  // 依所選期間算出的 {price,highRef,dropPct,rangeLabel,...}
 
 const HAS_SERVER = location.protocol==="http:" &&
@@ -199,14 +215,12 @@ function parseYahoo(data, sym){
     const res=data.chart.result[0], meta=res.meta;
     const price=meta.regularMarketPrice; if(price==null) return null;
     const ts=res.timestamp||[];
-    const highsRaw=(res.indicators&&res.indicators.quote&&res.indicators.quote[0].high)||[];
-    const t=[],h=[];
-    for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&highsRaw[i]!=null){ t.push(ts[i]); h.push(+highsRaw[i]); } }
-    if(!h.length){ const h52=meta.fiftyTwoWeekHigh; if(!h52) return null;
-                   return {symbol:meta.symbol||sym,price:+price,currency:meta.currency||"",
-                           exchange:meta.exchangeName||"",ts:[meta.regularMarketTime||0],highs:[+h52]}; }
+    const closeRaw=(res.indicators&&res.indicators.quote&&res.indicators.quote[0].close)||[];
+    const t=[],c=[];
+    for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&closeRaw[i]!=null){ t.push(ts[i]); c.push(+closeRaw[i]); } }
+    if(!c.length) return null;
     return {symbol:meta.symbol||sym, price:+price, currency:meta.currency||"",
-            exchange:meta.exchangeName||"", ts:t, highs:h};
+            exchange:meta.exchangeName||"", ts:t, closes:c};
   }catch(e){ return null; }
 }
 async function getData(raw){
@@ -221,23 +235,23 @@ async function getData(raw){
         if(!r.ok) continue;
         const d=JSON.parse(await r.text());
         const q=parseYahoo(d,sym);
-        if(q&&q.highs&&q.highs.length) return Object.assign({ok:true},q);
+        if(q&&q.closes&&q.closes.length) return Object.assign({ok:true},q);
       }catch(e){}
     }
   }
   return {ok:false,error:"自動抓價失敗(可能代理服務忙碌或代碼有誤)。已可改用「手動輸入股價」。"};
 }
 
-// 依所選期間算出高點與跌幅
+// 依所選期間,取「期間內最高收盤價」當高點,再算跌幅
 function computeQuote(){
   if(!lastData) return;
   const rr = RANGES.find(x=>x[0]===state.range) || RANGES[3];
   const cutoff = Date.now()/1000 - rr[2]*86400;
   let hi=null;
-  for(let i=0;i<lastData.highs.length;i++){
-    if(lastData.ts[i]>=cutoff){ const h=lastData.highs[i]; if(hi==null||h>hi) hi=h; }
+  for(let i=0;i<lastData.closes.length;i++){
+    if(lastData.ts[i]>=cutoff){ const c=lastData.closes[i]; if(hi==null||c>hi) hi=c; }
   }
-  if(hi==null) hi=Math.max.apply(null,lastData.highs);  // 窗內無資料 → 用全部
+  if(hi==null) hi=Math.max.apply(null,lastData.closes);  // 窗內無資料 → 用全部
   const drop=Math.max(0, r2((hi-lastData.price)/hi*100));
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
              exchange:lastData.exchange, highRef:hi, dropPct:drop, rangeLabel:rr[1]};
@@ -340,7 +354,7 @@ function showQuote(){
   $("quoteCard").classList.remove("hide");
   $("qSym").textContent=lastQuote.symbol;
   $("qPrice").textContent=fmt(lastQuote.price,2)+" "+(lastQuote.currency||"");
-  $("qHighKey").textContent="高點("+lastQuote.rangeLabel+")";
+  $("qHighKey").textContent="收盤高點("+lastQuote.rangeLabel+")";
   $("qHigh").textContent=fmt(lastQuote.highRef,2)+" "+(lastQuote.currency||"");
   $("qDrop").textContent="-"+lastQuote.dropPct+"%";
   $("qMeta").textContent=(lastQuote.exchange||"")+(lastQuote.currency?" ・ "+lastQuote.currency:"");
@@ -387,8 +401,8 @@ async function query(){
     if(!j.ok){ lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
                $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return; }
     lastData={symbol:j.symbol,price:+j.price,currency:j.currency||"",exchange:j.exchange||"",
-              ts:j.ts||[],highs:(j.highs||[]).map(Number)};
-    if(!lastData.highs.length){ $("msg").textContent="抓到資料但缺少歷史高點,請改用手動輸入。"; setManual(true); return; }
+              ts:j.ts||[],closes:(j.closes||[]).map(Number)};
+    if(!lastData.closes.length){ $("msg").textContent="抓到資料但缺少歷史收盤價,請改用手動輸入。"; setManual(true); return; }
     computeQuote(); showQuote(); renderAll();
   }finally{
     $("go").disabled=false; $("go").textContent="查詢並試算";
