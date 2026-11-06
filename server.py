@@ -74,14 +74,15 @@ def _fetch_one(symbol: str):
             if not cl_out:   # 後備:至少給目前價一筆
                 ts_out = [int(meta.get("regularMarketTime") or 0)]
                 cl_out = [float(price)]
-            # 昨收 = 日線倒數第二根收盤(最後一根是今天/最新)。
-            # 不可用 meta.chartPreviousClose:那是「整段抓取範圍起點之前」的收盤,
-            # 在 range=5y 下等於約 5 年前的價格,會害今日跌幅算錯。
-            prev = cl_out[-2] if len(cl_out) >= 2 else None
+            # 今日漲跌幅直接用 Yahoo 官方欄位(與看盤軟體一致),不要自己從收盤序列推昨收:
+            # 序列可能有 null(缺漏日)、或遇除權息/分割而失真。
+            chg = meta.get("regularMarketChangePercent")
+            if chg is None:
+                chg = meta.get("fulldayChangePercent")
             return {
                 "symbol": meta.get("symbol", symbol),
                 "price": float(price),
-                "prevClose": (float(prev) if prev is not None else None),
+                "changePct": (float(chg) if chg is not None else None),
                 "currency": meta.get("currency", ""),
                 "exchange": meta.get("exchangeName", ""),
                 "ts": ts_out,

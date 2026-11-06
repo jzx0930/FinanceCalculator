@@ -256,9 +256,10 @@ function parseYahoo(data, sym){
     const t=[],c=[];
     for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&closeRaw[i]!=null){ t.push(ts[i]); c.push(+closeRaw[i]); } }
     if(!c.length) return null;
-    // 昨收由前端用時間戳判斷(見 computeQuote);這裡附一個後備值即可
-    const prev = (c.length>=2)? c[c.length-2] : null;
-    return {symbol:meta.symbol||sym, price:+price, prevClose:prev,
+    // 今日漲跌幅優先用 Yahoo 官方欄位(與看盤一致);收盤序列僅供期間高點計算
+    let chgPct = meta.regularMarketChangePercent;
+    if(chgPct==null) chgPct = meta.fulldayChangePercent;
+    return {symbol:meta.symbol||sym, price:+price, changePct:(chgPct!=null?+chgPct:null),
             currency:meta.currency||"", exchange:meta.exchangeName||"", ts:t, closes:c};
   }catch(e){ return null; }
 }
@@ -292,21 +293,23 @@ function computeQuote(){
   }
   if(hi==null) hi=Math.max.apply(null,lastData.closes);
   const drop=Math.max(0, r2((hi-lastData.price)/hi*100));
-  // 昨收:若日線最後一根約在「今天」(與現在相差 < 18 小時),它就是今天的即時棒,
-  // 昨收取倒數第二根;否則(今天的棒還沒出現)最後一根本身就是昨收。
-  const n=lastData.closes.length;
-  let pc=null;
-  if(n>=1){
-    const lastTs=lastData.ts[n-1], nowSec=Date.now()/1000;
-    const lastIsToday=(nowSec-lastTs) < 0.75*86400;
-    pc = (lastIsToday && n>=2) ? lastData.closes[n-2] : lastData.closes[n-1];
+  // 今日漲跌:優先用 Yahoo 官方當日漲跌幅(與看盤軟體一致)。
+  // 後備(官方缺值時)才用日線序列估昨收;序列可能有 null(缺漏日),所以挑「最後一筆非今天、非 null 的收盤」。
+  let chg = (lastData.changePct!=null)? r2(lastData.changePct) : null;
+  if(chg==null){
+    const cs=lastData.closes, tsArr=lastData.ts, n=cs.length, nowSec=Date.now()/1000;
+    let pc=null;
+    for(let i=n-1;i>=0;i--){
+      if(cs[i]==null) continue;
+      if((nowSec - tsArr[i]) < 0.75*86400) continue;  // 跳過今天的即時棒
+      pc=cs[i]; break;
+    }
+    if(pc&&pc>0) chg=r2((lastData.price-pc)/pc*100);
   }
-  if(pc==null) pc=lastData.prevClose||null;
-  const chg=(pc&&pc>0)? r2((lastData.price-pc)/pc*100) : null;   // +漲 / −跌
-  const today=(chg==null)? null : Math.max(0, -chg);             // 今日跌幅(只取下跌)
+  const today=(chg==null)? null : Math.max(0, -chg);
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
              exchange:lastData.exchange, highRef:hi, dropPct:drop,
-             todayChangePct:chg, todayDropPct:today, prevClose:pc, rangeLabel:rr[1]};
+             todayChangePct:chg, todayDropPct:today, rangeLabel:rr[1]};
 }
 
 function sortedTiers(){
@@ -526,7 +529,7 @@ async function query(){
     const j=await getData(sym);
     if(!j.ok){ lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
                $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return; }
-    lastData={symbol:j.symbol,price:+j.price,prevClose:(j.prevClose!=null?+j.prevClose:null),
+    lastData={symbol:j.symbol,price:+j.price,changePct:(j.changePct!=null?+j.changePct:null),
               currency:j.currency||"",exchange:j.exchange||"",ts:j.ts||[],closes:(j.closes||[]).map(Number)};
     if(!lastData.closes.length){ $("msg").textContent="抓到資料但缺少歷史收盤價,請改用手動輸入。"; setManual(true); return; }
     computeQuote(); showQuote(); renderAll();
