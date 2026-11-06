@@ -33,7 +33,7 @@
   .chip.on{background:var(--accent);color:#04121f;border-color:var(--accent)}
   .chk{display:flex;align-items:center;gap:7px;margin-top:14px;color:var(--mut);font-size:13px;cursor:pointer}
   .chk input{width:auto}
-  .quote{display:flex;gap:26px;flex-wrap:wrap;align-items:baseline}
+  .quote{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}
   .quote .big{font-size:30px;font-weight:800}
   .q{display:flex;flex-direction:column}
   .q .k{font-size:12px;color:var(--mut)}
@@ -62,6 +62,9 @@
   .sumline{display:flex;gap:26px;flex-wrap:wrap;margin-top:12px}
   .sumline .v{font-size:20px;font-weight:800}
   .pos{color:var(--green)} .warn{color:var(--amber)}
+  .today-box{margin-top:14px;padding:13px 15px;border:1px dashed var(--line);border-radius:10px}
+  .today-ok{border-color:var(--green)} .today-no{border-color:var(--line)}
+  .big-rec{font-size:19px;font-weight:800}
   .err{color:var(--red);font-size:14px}
   .disc{font-size:12px;color:var(--mut);line-height:1.6;margin-top:6px}
   .toolbar{display:flex;gap:8px;margin-top:10px}
@@ -72,7 +75,7 @@
 <body>
 <div class="wrap">
   <h1>小跌小買・大跌大買</h1>
-  <div class="sub">以「距所選期間最高收盤價的跌幅」決定投入資金比例 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
+  <div class="sub">期間看「距最高收盤價的跌幅」決定力度;再用「當天跌幅」當閘門(可加倍)決定今天要不要出手 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
 
   <div class="card">
     <div class="row">
@@ -94,10 +97,10 @@
       <div class="chips" id="rangeRow"></div>
     </div>
 
-    <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路,最穩定)</label>
+    <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路,最穩定;手動模式不計當天跌幅)</label>
     <div id="manualBox" class="row hide" style="margin-top:10px">
       <div><label>現價</label><input id="mPrice" type="number" min="0" step="0.01" placeholder="例如 900"></div>
-      <div><label>高點</label><input id="mHigh" type="number" min="0" step="0.01" placeholder="例如 1200"></div>
+      <div><label>高點(收盤)</label><input id="mHigh" type="number" min="0" step="0.01" placeholder="例如 1200"></div>
     </div>
 
     <div id="msg" class="err" style="margin-top:10px"></div>
@@ -108,7 +111,8 @@
       <div class="q"><span class="k">代碼</span><span class="v" id="qSym">—</span></div>
       <div class="q"><span class="k">現價</span><span class="v big" id="qPrice">—</span></div>
       <div class="q"><span class="k" id="qHighKey">收盤高點</span><span class="v" id="qHigh">—</span></div>
-      <div class="q"><span class="k">目前跌幅</span><span class="v big drop" id="qDrop">—</span></div>
+      <div class="q"><span class="k">距高點跌幅</span><span class="v big drop" id="qDrop">—</span></div>
+      <div class="q"><span class="k">今日跌幅</span><span class="v drop" id="qToday">—</span></div>
       <div class="q"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
     <div class="gauge" id="gauge"></div>
@@ -117,15 +121,19 @@
 
   <div id="resultCard" class="card hide">
     <div class="sumline">
-      <div class="q"><span class="k">目前落在</span><span class="v" id="rTier">—</span></div>
-      <div class="q"><span class="k">此階單筆投入</span><span class="v" id="rThis">—</span></div>
+      <div class="q"><span class="k">目前落在(期間)</span><span class="v" id="rTier">—</span></div>
+      <div class="q"><span class="k">此階基準單筆</span><span class="v" id="rThis">—</span></div>
       <div class="q"><span class="k">累計應投入(含較淺各階)</span><span class="v" id="rCum">—</span></div>
       <div class="q"><span class="k">剩餘資金</span><span class="v" id="rLeft">—</span></div>
+    </div>
+    <div class="today-box" id="todayBox">
+      <div class="k muted" style="font-size:12px">今日是否出手(閘門＋倍數)</div>
+      <div class="big-rec" id="rToday">—</div>
     </div>
   </div>
 
   <div class="card">
-    <label style="font-size:14px;color:var(--fg)">加碼級距表(可直接修改,自動存於本機)</label>
+    <label style="font-size:14px;color:var(--fg)">① 期間加碼級距表(距最高收盤價的跌幅 → 單筆投入%,可改,自動存)</label>
     <div class="muted" style="font-size:12px;margin-bottom:6px">
       「跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
     </div>
@@ -150,10 +158,33 @@
   </div>
 
   <div class="card">
+    <label style="font-size:14px;color:var(--fg)">② 當天跌幅條件(閘門＋倍數,相對昨收・盤中即時)</label>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">
+      今日跌幅沒到「閘門」就今天觀望;到了才用上面的期間級距金額,再乘下面對應的倍數。
+      <b>把倍數全設成 1 = 純閘門</b>(今日只當開關);設越高 = 大跌日買越多。
+    </div>
+    <div class="row" style="align-items:flex-end">
+      <div style="max-width:220px">
+        <label>今日最小跌幅門檻 (%)</label>
+        <input id="gate" type="number" min="0" step="0.5" placeholder="1">
+      </div>
+    </div>
+    <table id="multTable" style="max-width:420px">
+      <thead><tr><th>今日跌幅 ≥ (%)</th><th>倍數 ×</th><th></th></tr></thead>
+      <tbody id="multBody"></tbody>
+    </table>
+    <div class="toolbar">
+      <button class="ghost" id="addMult">＋ 新增一段</button>
+      <button class="ghost" id="resetMult">回復預設倍數</button>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="disc">
       ⚠️ 本工具只是把「你自己設定的規則」拿目前股價做試算,<b>不是投資建議</b>。向下攤平(越跌越買)有實質風險:
       股價可能持續下跌甚至不再回到高點,請務必只用你能承受的資金、並自行判斷個股基本面。價格資料來自 Yahoo 財經
-      (經公開 CORS 代理轉送),可能延遲、偶有缺漏或代理忙碌而失敗;抓不到時請用上方「手動輸入股價」。下單前以券商報價為準。
+      (經公開 CORS 代理轉送),可能延遲、偶有缺漏或代理忙碌而失敗;抓不到時請用「手動輸入股價」。
+      今日跌幅以昨收為準,除權息日會失真;盤中數字會跳動。下單前以券商報價為準。
     </div>
   </div>
 </div>
@@ -161,27 +192,27 @@
 <script>
 /* ──────────────────────────────────────────────────────────────
    運算原理(小跌小買・大跌大買)
-   1. 取股價:代碼正規化(台股數字 → .TW 上市 / .TWO 上櫃;美股原樣),
-      抓 Yahoo 近 5 年日線,得到 現價、每日收盤價序列 closes[]、對應時間 ts[]。
-   2. 基準高點 H:依所選期間 N 天,取「ts 在 (現在 − N 天) 之後」的收盤價最大值。
-      期間越長 → 納入越早的高點 → H 可能越高。
-   3. 跌幅:dropPct = max(0, (H − 現價) / H × 100)。(創新高時為 0,不會是負)
-   4. 對照級距:級距表 = [跌幅門檻, 單筆投入%] 陣列。
-      目前階 = 門檻 ≤ dropPct 的「最深」一階。
-      此階金額 = 總資金 × 該階%;股數 = floor(金額 / 現價)。
-      累計應投入% = 所有門檻 ≤ dropPct 的投入% 相加;累計金額 = 總資金 × 累計%。
-      剩餘資金 = 總資金 − 累計金額。
-   5. 換期間 / 改級距 / 改資金,都是用同一份已抓資料「即時重算」,不重新連線。
-   註:高點採「最高收盤價」(非盤中最高);原始收盤未還原權息,遇除權息或分割可能偏差。
-      本工具為自訂規則試算,非投資建議。
+   1. 取股價:代碼正規化(台股數字 → .TW/.TWO;美股原樣),抓 Yahoo 近 5 年日線,
+      得到 現價、每日收盤 closes[]、時間 ts[]、昨收 prevClose。
+   2. 期間高點 H:依所選期間 N 天,取最近 N 天內的「最高收盤價」。
+   3. 距高點跌幅:dropPct = max(0,(H − 現價)/H × 100)。→ 決定「力度」落在哪一期間階。
+   4. 期間級距:門檻 ≤ dropPct 的最深一階 = 基準單筆投入%;金額 = 總資金 × 該%。
+   5. 當天跌幅(閘門＋倍數):todayDrop = max(0,(昨收 − 現價)/昨收 × 100)。
+      - 閘門:todayDrop < gate → 今日觀望,不出手。
+      - 倍數:todayDrop ≥ gate → m = 倍數表中門檻 ≤ todayDrop 的最大一段(預設大多 ×1)。
+      - 今日建議買入 = 期間基準單筆金額 × m(上限為總資金)。倍數全設 1 即「純閘門」。
+   6. 換期間/改級距/改資金/改倍數都用同一份已抓資料即時重算,不重新連線。
+   註:高點與今日跌幅都用收盤/昨收,未還原權息,除權息或分割可能偏差。非投資建議。
    ────────────────────────────────────────────────────────────── */
 const DEFAULT_TIERS = [[5,5],[10,10],[15,15],[20,20],[25,20],[30,30]];
+const DEFAULT_MULT  = [[1,1],[3,1.2],[5,1.5]];
+const DEFAULT_GATE  = 1;
 const RANGES = [["1m","近1月",30],["3m","近3月",91],["6m","近6月",182],
                 ["1y","近1年",365],["2y","近2年",730],["5y","近5年",1e9]];
-const LS = "xdxm_state_v2";
+const LS = "xdxm_state_v3";
 let state = loadState();
-let lastData = null;   // 原始序列 {symbol,price,currency,exchange,ts[],closes[]}
-let lastQuote = null;  // 依所選期間算出的 {price,highRef,dropPct,rangeLabel,...}
+let lastData = null;   // {symbol,price,prevClose,currency,exchange,ts[],closes[]}
+let lastQuote = null;  // 依期間算出的 {price,highRef,dropPct,todayDropPct,rangeLabel,...}
 
 const HAS_SERVER = location.protocol==="http:" &&
                    (location.hostname==="127.0.0.1"||location.hostname==="localhost");
@@ -193,8 +224,14 @@ const PROXIES = [
 ];
 
 function loadState(){
-  try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&s.tiers) return s; }catch(e){}
-  return {tiers: DEFAULT_TIERS.map(r=>r.slice()), capital:"", symbol:"", range:"1y"};
+  let s={};
+  try{ s=JSON.parse(localStorage.getItem(LS))||{}; }catch(e){}
+  return {
+    tiers: (s.tiers&&s.tiers.length)? s.tiers : DEFAULT_TIERS.map(r=>r.slice()),
+    mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
+    gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
+    capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
+  };
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
 
@@ -219,8 +256,10 @@ function parseYahoo(data, sym){
     const t=[],c=[];
     for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&closeRaw[i]!=null){ t.push(ts[i]); c.push(+closeRaw[i]); } }
     if(!c.length) return null;
-    return {symbol:meta.symbol||sym, price:+price, currency:meta.currency||"",
-            exchange:meta.exchangeName||"", ts:t, closes:c};
+    let prev=meta.chartPreviousClose;
+    if(prev==null && c.length>=2) prev=c[c.length-2];
+    return {symbol:meta.symbol||sym, price:+price, prevClose:(prev!=null?+prev:null),
+            currency:meta.currency||"", exchange:meta.exchangeName||"", ts:t, closes:c};
   }catch(e){ return null; }
 }
 async function getData(raw){
@@ -242,7 +281,7 @@ async function getData(raw){
   return {ok:false,error:"自動抓價失敗(可能代理服務忙碌或代碼有誤)。已可改用「手動輸入股價」。"};
 }
 
-// 依所選期間,取「期間內最高收盤價」當高點,再算跌幅
+// 依所選期間:期間內最高收盤 = 高點;另算當天跌幅(相對昨收)
 function computeQuote(){
   if(!lastData) return;
   const rr = RANGES.find(x=>x[0]===state.range) || RANGES[3];
@@ -251,20 +290,30 @@ function computeQuote(){
   for(let i=0;i<lastData.closes.length;i++){
     if(lastData.ts[i]>=cutoff){ const c=lastData.closes[i]; if(hi==null||c>hi) hi=c; }
   }
-  if(hi==null) hi=Math.max.apply(null,lastData.closes);  // 窗內無資料 → 用全部
+  if(hi==null) hi=Math.max.apply(null,lastData.closes);
   const drop=Math.max(0, r2((hi-lastData.price)/hi*100));
+  const pc=lastData.prevClose;
+  const today=(pc&&pc>0)? Math.max(0, r2((pc-lastData.price)/pc*100)) : null;
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
-             exchange:lastData.exchange, highRef:hi, dropPct:drop, rangeLabel:rr[1]};
+             exchange:lastData.exchange, highRef:hi, dropPct:drop, todayDropPct:today, rangeLabel:rr[1]};
 }
 
 function sortedTiers(){
   return state.tiers.map(r=>[Number(r[0]),Number(r[1])])
     .filter(r=>!isNaN(r[0])&&!isNaN(r[1])).sort((a,b)=>a[0]-b[0]);
 }
+function sortedMult(){
+  return state.mult.map(r=>[Number(r[0]),Number(r[1])])
+    .filter(r=>!isNaN(r[0])&&!isNaN(r[1])).sort((a,b)=>a[0]-b[0]);
+}
 function cumAt(tiers,drop){
   if(drop==null) return 0;
   return tiers.filter(t=>drop>=t[0]).reduce((s,t)=>s+t[1],0);
 }
+function multAt(td){
+  let m=1; sortedMult().forEach(([th,mu])=>{ if(td>=th) m=mu; }); return m;
+}
+
 function renderTierTable(){
   const body=$("tierBody"); body.innerHTML="";
   const price = lastQuote ? lastQuote.price : null;
@@ -307,6 +356,34 @@ function renderTierTable(){
     });
   });
 }
+function renderMultTable(){
+  const body=$("multBody"); body.innerHTML="";
+  const td = lastQuote ? lastQuote.todayDropPct : null;
+  const ms=sortedMult();
+  let activeIdx=-1; ms.forEach((m,i)=>{ if(td!=null && td>=m[0]) activeIdx=i; });
+  ms.forEach((m,i)=>{
+    const tr=document.createElement("tr");
+    if(i===activeIdx) tr.className="active";
+    tr.innerHTML=
+      `<td><input class="tbl-input" data-i="${i}" data-c="0" type="number" value="${m[0]}"></td>`+
+      `<td><input class="tbl-input" data-i="${i}" data-c="1" type="number" step="0.1" value="${m[1]}"></td>`+
+      `<td><button class="ghost mdel" data-del="${i}" style="padding:4px 9px">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("change",()=>{
+      const i=+inp.dataset.i, c=+inp.dataset.c;
+      const ms2=sortedMult(); ms2[i][c]=parseFloat(inp.value);
+      state.mult=ms2; saveState(); renderAll();
+    });
+  });
+  body.querySelectorAll(".mdel").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const ms2=sortedMult(); ms2.splice(+b.dataset.del,1);
+      state.mult=ms2.length?ms2:[[1,1]]; saveState(); renderAll();
+    });
+  });
+}
 function renderGauge(){
   const g=$("gauge"); g.innerHTML="";
   if(!lastQuote) return;
@@ -321,7 +398,7 @@ function renderGauge(){
   const mk=document.createElement("div"); mk.className="marker";
   mk.style.left=Math.min(100,Math.max(0,d/maxTh*100))+"%";
   mk.setAttribute("data-lbl","現在 "+d+"%"); g.appendChild(mk);
-  $("gaugeNote").textContent=`刻度為各加碼階的跌幅門檻;白線是目前跌幅。滿刻度 ${maxTh.toFixed(0)}%。`;
+  $("gaugeNote").textContent=`刻度為各加碼階的跌幅門檻;白線是目前距高點跌幅。滿刻度 ${maxTh.toFixed(0)}%。`;
 }
 function renderResult(){
   const price = lastQuote ? lastQuote.price : null;
@@ -330,25 +407,58 @@ function renderResult(){
   const tiers = sortedTiers();
   if(!lastQuote){ $("resultCard").classList.add("hide"); return; }
   $("resultCard").classList.remove("hide");
+
   let activeIdx=-1; tiers.forEach((t,i)=>{ if(drop>=t[0]) activeIdx=i; });
+  let baseAmt=0, al=0;
   if(activeIdx<0){
-    $("rTier").textContent="尚未達第一階"; $("rThis").textContent="無需加碼"; $("rThis").className="v";
+    $("rTier").textContent="尚未達第一階"; $("rThis").textContent="無"; $("rThis").className="v";
     $("rCum").textContent="0%"+(capital?`　(${fmt(0)} ${cur()})`:"");
-    $("rLeft").textContent=capital? fmt(capital)+" "+cur() : "—"; $("rLeft").className="v"; return;
+    $("rLeft").textContent=capital? fmt(capital)+" "+cur() : "—"; $("rLeft").className="v";
+  }else{
+    const th=tiers[activeIdx][0]; al=tiers[activeIdx][1];
+    const cum=cumAt(tiers,drop);
+    baseAmt=capital*al/100; const cumAmt=capital*cum/100, left=capital-cumAmt;
+    const baseShares=(price>0)?Math.floor(baseAmt/price):null;
+    $("rTier").textContent=`第 ${activeIdx+1} 階(跌幅 ≥ ${th}%)`;
+    $("rThis").innerHTML = `${al}%`+(capital?`　<span class="muted" style="font-size:14px">${fmt(baseAmt)} ${cur()}`+
+        (baseShares!=null?`・約 ${fmt(baseShares)} 股`:"")+`</span>`:"");
+    $("rThis").className="v";
+    $("rCum").innerHTML = `${cum}%`+(capital?`　<span class="muted" style="font-size:14px">${fmt(cumAmt)} ${cur()}</span>`:"");
+    $("rLeft").textContent = capital? fmt(left)+" "+cur() : "—";
+    $("rLeft").className = "v "+(left<0?"warn":"");
   }
-  const [th,al]=tiers[activeIdx];
-  const cum=cumAt(tiers,drop);
-  const thisAmt=capital*al/100, cumAmt=capital*cum/100, left=capital-cumAmt;
-  const thisShares=(price>0)?Math.floor(thisAmt/price):null;
-  $("rTier").textContent=`第 ${activeIdx+1} 階(跌幅 ≥ ${th}%)`;
-  $("rThis").innerHTML = `${al}%`+(capital?`　<span class="muted" style="font-size:14px">${fmt(thisAmt)} ${cur()}`+
-      (thisShares!=null?`・約 ${fmt(thisShares)} 股`:"")+`</span>`:"");
-  $("rThis").className="v pos";
-  $("rCum").innerHTML = `${cum}%`+(capital?`　<span class="muted" style="font-size:14px">${fmt(cumAmt)} ${cur()}</span>`:"");
-  $("rLeft").textContent = capital? fmt(left)+" "+cur() : "—";
-  $("rLeft").className = "v "+(left<0?"warn":"");
+
+  // 今日閘門 + 倍數
+  const box=$("todayBox"), el=$("rToday");
+  const td=lastQuote.todayDropPct, gate=parseFloat($("gate").value)||0;
+  if(td==null){
+    box.className="today-box today-no"; el.className="big-rec muted";
+    el.textContent="手動模式或無昨收資料,今日跌幅不納入判斷。";
+    return;
+  }
+  if(td<gate){
+    box.className="today-box today-no"; el.className="big-rec muted";
+    el.innerHTML=`今日 −${td}% &lt; 門檻 ${gate}% → <b>今日觀望,不加碼</b>`;
+    return;
+  }
+  if(activeIdx<0){
+    box.className="today-box today-no"; el.className="big-rec muted";
+    el.innerHTML=`今日 −${td}% 達門檻,但距期間高點未達第一階 → <b>無對應加碼金額</b>`;
+    return;
+  }
+  const m=multAt(td);
+  box.className="today-box today-ok"; el.className="big-rec pos";
+  if(!capital){
+    el.innerHTML=`今日 −${td}% ✓ × ${m} → 以 ${al}% 為基準買入(請輸入資金看金額)`;
+    return;
+  }
+  let buy=baseAmt*m; const capped=buy>capital; if(capped) buy=capital;
+  const shares=(price>0)?Math.floor(buy/price):null;
+  el.innerHTML=`今日 −${td}% ✓ × ${m} → 建議買入 <b>${fmt(buy)} ${cur()}</b>`+
+      (shares!=null?`(約 ${fmt(shares)} 股)`:"")+
+      `　<span class="muted" style="font-size:13px">= 期間基準 ${fmt(baseAmt)} × ${m}${capped?"(已以總資金為上限)":""}</span>`;
 }
-function renderAll(){ renderTierTable(); renderGauge(); renderResult(); }
+function renderAll(){ renderTierTable(); renderMultTable(); renderGauge(); renderResult(); }
 
 function showQuote(){
   $("quoteCard").classList.remove("hide");
@@ -357,6 +467,7 @@ function showQuote(){
   $("qHighKey").textContent="收盤高點("+lastQuote.rangeLabel+")";
   $("qHigh").textContent=fmt(lastQuote.highRef,2)+" "+(lastQuote.currency||"");
   $("qDrop").textContent="-"+lastQuote.dropPct+"%";
+  $("qToday").textContent=(lastQuote.todayDropPct==null)?"—":("-"+lastQuote.todayDropPct+"%");
   $("qMeta").textContent=(lastQuote.exchange||"")+(lastQuote.currency?" ・ "+lastQuote.currency:"");
 }
 
@@ -377,7 +488,7 @@ function renderRangeChips(){
 function setManual(on){
   $("manual").checked=on;
   $("manualBox").classList.toggle("hide",!on);
-  $("rangeWrap").classList.toggle("hide",on);  // 手動時高點就是你填的,不需期間
+  $("rangeWrap").classList.toggle("hide",on);
 }
 
 async function query(){
@@ -389,7 +500,7 @@ async function query(){
     if(!(p>0&&h>0)){ $("msg").textContent="請輸入有效的現價與高點。"; return; }
     lastData=null;
     lastQuote={symbol:($("symbol").value.trim()||"手動"),price:p,currency:"",exchange:"手動輸入",
-               highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),rangeLabel:"手動"};
+               highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),todayDropPct:null,rangeLabel:"手動"};
     showQuote(); renderAll(); return;
   }
 
@@ -400,8 +511,8 @@ async function query(){
     const j=await getData(sym);
     if(!j.ok){ lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
                $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return; }
-    lastData={symbol:j.symbol,price:+j.price,currency:j.currency||"",exchange:j.exchange||"",
-              ts:j.ts||[],closes:(j.closes||[]).map(Number)};
+    lastData={symbol:j.symbol,price:+j.price,prevClose:(j.prevClose!=null?+j.prevClose:null),
+              currency:j.currency||"",exchange:j.exchange||"",ts:j.ts||[],closes:(j.closes||[]).map(Number)};
     if(!lastData.closes.length){ $("msg").textContent="抓到資料但缺少歷史收盤價,請改用手動輸入。"; setManual(true); return; }
     computeQuote(); showQuote(); renderAll();
   }finally{
@@ -412,6 +523,7 @@ async function query(){
 // 初始化
 $("symbol").value=state.symbol||"";
 $("capital").value=state.capital||"";
+$("gate").value=(state.gate!=null?state.gate:DEFAULT_GATE);
 if(!state.range) state.range="1y";
 renderRangeChips();
 $("go").addEventListener("click",query);
@@ -419,9 +531,13 @@ $("manual").addEventListener("change",e=>setManual(e.target.checked));
 ["symbol","capital","mPrice","mHigh"].forEach(id=>
   $(id).addEventListener("keydown",e=>{if(e.key==="Enter")query();}));
 $("capital").addEventListener("input",()=>{ state.capital=$("capital").value; saveState(); if(lastQuote) renderAll(); });
+$("gate").addEventListener("input",()=>{ state.gate=parseFloat($("gate").value); saveState(); if(lastQuote) renderResult(); });
 $("addRow").addEventListener("click",()=>{ const ts=sortedTiers(); const last=ts.length?ts[ts.length-1][0]:0;
    ts.push([last+5,5]); state.tiers=ts; saveState(); renderAll(); });
 $("resetTiers").addEventListener("click",()=>{ state.tiers=DEFAULT_TIERS.map(r=>r.slice()); saveState(); renderAll(); });
+$("addMult").addEventListener("click",()=>{ const ms=sortedMult(); const last=ms.length?ms[ms.length-1][0]:0;
+   ms.push([last+2,1]); state.mult=ms; saveState(); renderAll(); });
+$("resetMult").addEventListener("click",()=>{ state.mult=DEFAULT_MULT.map(r=>r.slice()); saveState(); renderAll(); });
 
 renderAll();
 </script>

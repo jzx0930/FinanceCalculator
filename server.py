@@ -74,9 +74,13 @@ def _fetch_one(symbol: str):
             if not cl_out:   # 後備:至少給目前價一筆
                 ts_out = [int(meta.get("regularMarketTime") or 0)]
                 cl_out = [float(price)]
+            prev = meta.get("chartPreviousClose")
+            if prev is None and len(cl_out) >= 2:
+                prev = cl_out[-2]
             return {
                 "symbol": meta.get("symbol", symbol),
                 "price": float(price),
+                "prevClose": (float(prev) if prev is not None else None),
                 "currency": meta.get("currency", ""),
                 "exchange": meta.get("exchangeName", ""),
                 "ts": ts_out,
