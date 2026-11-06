@@ -112,7 +112,7 @@
       <div class="q"><span class="k">現價</span><span class="v big" id="qPrice">—</span></div>
       <div class="q"><span class="k" id="qHighKey">收盤高點</span><span class="v" id="qHigh">—</span></div>
       <div class="q"><span class="k">距高點跌幅</span><span class="v big drop" id="qDrop">—</span></div>
-      <div class="q"><span class="k">今日跌幅</span><span class="v drop" id="qToday">—</span></div>
+      <div class="q"><span class="k">今日漲跌</span><span class="v drop" id="qToday">—</span></div>
       <div class="q"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
     <div class="gauge" id="gauge"></div>
@@ -256,9 +256,9 @@ function parseYahoo(data, sym){
     const t=[],c=[];
     for(let i=0;i<ts.length;i++){ if(ts[i]!=null&&closeRaw[i]!=null){ t.push(ts[i]); c.push(+closeRaw[i]); } }
     if(!c.length) return null;
-    let prev=meta.chartPreviousClose;
-    if(prev==null && c.length>=2) prev=c[c.length-2];
-    return {symbol:meta.symbol||sym, price:+price, prevClose:(prev!=null?+prev:null),
+    // 昨收由前端用時間戳判斷(見 computeQuote);這裡附一個後備值即可
+    const prev = (c.length>=2)? c[c.length-2] : null;
+    return {symbol:meta.symbol||sym, price:+price, prevClose:prev,
             currency:meta.currency||"", exchange:meta.exchangeName||"", ts:t, closes:c};
   }catch(e){ return null; }
 }
@@ -292,10 +292,21 @@ function computeQuote(){
   }
   if(hi==null) hi=Math.max.apply(null,lastData.closes);
   const drop=Math.max(0, r2((hi-lastData.price)/hi*100));
-  const pc=lastData.prevClose;
-  const today=(pc&&pc>0)? Math.max(0, r2((pc-lastData.price)/pc*100)) : null;
+  // 昨收:若日線最後一根約在「今天」(與現在相差 < 18 小時),它就是今天的即時棒,
+  // 昨收取倒數第二根;否則(今天的棒還沒出現)最後一根本身就是昨收。
+  const n=lastData.closes.length;
+  let pc=null;
+  if(n>=1){
+    const lastTs=lastData.ts[n-1], nowSec=Date.now()/1000;
+    const lastIsToday=(nowSec-lastTs) < 0.75*86400;
+    pc = (lastIsToday && n>=2) ? lastData.closes[n-2] : lastData.closes[n-1];
+  }
+  if(pc==null) pc=lastData.prevClose||null;
+  const chg=(pc&&pc>0)? r2((lastData.price-pc)/pc*100) : null;   // +漲 / −跌
+  const today=(chg==null)? null : Math.max(0, -chg);             // 今日跌幅(只取下跌)
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
-             exchange:lastData.exchange, highRef:hi, dropPct:drop, todayDropPct:today, rangeLabel:rr[1]};
+             exchange:lastData.exchange, highRef:hi, dropPct:drop,
+             todayChangePct:chg, todayDropPct:today, prevClose:pc, rangeLabel:rr[1]};
 }
 
 function sortedTiers(){
@@ -430,31 +441,32 @@ function renderResult(){
 
   // 今日閘門 + 倍數
   const box=$("todayBox"), el=$("rToday");
-  const td=lastQuote.todayDropPct, gate=parseFloat($("gate").value)||0;
+  const td=lastQuote.todayDropPct, chg=lastQuote.todayChangePct, gate=parseFloat($("gate").value)||0;
+  const chgTxt=(chg==null)?"—":(chg<0?("−"+r2(-chg)+"%"):("+"+r2(chg)+"%"));
   if(td==null){
     box.className="today-box today-no"; el.className="big-rec muted";
-    el.textContent="手動模式或無昨收資料,今日跌幅不納入判斷。";
+    el.textContent="手動模式或無昨收資料,今日漲跌不納入判斷。";
     return;
   }
   if(td<gate){
     box.className="today-box today-no"; el.className="big-rec muted";
-    el.innerHTML=`今日 −${td}% &lt; 門檻 ${gate}% → <b>今日觀望,不加碼</b>`;
+    el.innerHTML=`今日 ${chgTxt} → 未達門檻 ${gate}% → <b>今日觀望,不加碼</b>`;
     return;
   }
   if(activeIdx<0){
     box.className="today-box today-no"; el.className="big-rec muted";
-    el.innerHTML=`今日 −${td}% 達門檻,但距期間高點未達第一階 → <b>無對應加碼金額</b>`;
+    el.innerHTML=`今日 ${chgTxt} 達門檻,但距期間高點未達第一階 → <b>無對應加碼金額</b>`;
     return;
   }
   const m=multAt(td);
   box.className="today-box today-ok"; el.className="big-rec pos";
   if(!capital){
-    el.innerHTML=`今日 −${td}% ✓ × ${m} → 以 ${al}% 為基準買入(請輸入資金看金額)`;
+    el.innerHTML=`今日 ${chgTxt} ✓ × ${m} → 以 ${al}% 為基準買入(請輸入資金看金額)`;
     return;
   }
   let buy=baseAmt*m; const capped=buy>capital; if(capped) buy=capital;
   const shares=(price>0)?Math.floor(buy/price):null;
-  el.innerHTML=`今日 −${td}% ✓ × ${m} → 建議買入 <b>${fmt(buy)} ${cur()}</b>`+
+  el.innerHTML=`今日 ${chgTxt} ✓ × ${m} → 建議買入 <b>${fmt(buy)} ${cur()}</b>`+
       (shares!=null?`(約 ${fmt(shares)} 股)`:"")+
       `　<span class="muted" style="font-size:13px">= 期間基準 ${fmt(baseAmt)} × ${m}${capped?"(已以總資金為上限)":""}</span>`;
 }
@@ -467,7 +479,10 @@ function showQuote(){
   $("qHighKey").textContent="收盤高點("+lastQuote.rangeLabel+")";
   $("qHigh").textContent=fmt(lastQuote.highRef,2)+" "+(lastQuote.currency||"");
   $("qDrop").textContent="-"+lastQuote.dropPct+"%";
-  $("qToday").textContent=(lastQuote.todayDropPct==null)?"—":("-"+lastQuote.todayDropPct+"%");
+  const _chg=lastQuote.todayChangePct;
+  if(_chg==null){ $("qToday").textContent="—"; $("qToday").className="v muted"; }
+  else{ $("qToday").textContent=(_chg<0?("−"+r2(-_chg)):("+"+r2(_chg)))+"%";
+        $("qToday").className="v "+(_chg<0?"drop":"pos"); }
   $("qMeta").textContent=(lastQuote.exchange||"")+(lastQuote.currency?" ・ "+lastQuote.currency:"");
 }
 
@@ -500,7 +515,7 @@ async function query(){
     if(!(p>0&&h>0)){ $("msg").textContent="請輸入有效的現價與高點。"; return; }
     lastData=null;
     lastQuote={symbol:($("symbol").value.trim()||"手動"),price:p,currency:"",exchange:"手動輸入",
-               highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),todayDropPct:null,rangeLabel:"手動"};
+               highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),todayChangePct:null,todayDropPct:null,rangeLabel:"手動"};
     showQuote(); renderAll(); return;
   }
 

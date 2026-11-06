@@ -74,9 +74,10 @@ def _fetch_one(symbol: str):
             if not cl_out:   # 後備:至少給目前價一筆
                 ts_out = [int(meta.get("regularMarketTime") or 0)]
                 cl_out = [float(price)]
-            prev = meta.get("chartPreviousClose")
-            if prev is None and len(cl_out) >= 2:
-                prev = cl_out[-2]
+            # 昨收 = 日線倒數第二根收盤(最後一根是今天/最新)。
+            # 不可用 meta.chartPreviousClose:那是「整段抓取範圍起點之前」的收盤,
+            # 在 range=5y 下等於約 5 年前的價格,會害今日跌幅算錯。
+            prev = cl_out[-2] if len(cl_out) >= 2 else None
             return {
                 "symbol": meta.get("symbol", symbol),
                 "price": float(price),
