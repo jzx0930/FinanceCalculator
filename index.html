@@ -103,6 +103,18 @@
       <div><label>高點(收盤)</label><input id="mHigh" type="number" min="0" step="0.01" placeholder="例如 1200"></div>
     </div>
 
+    <div class="row" style="margin-top:12px;align-items:flex-end">
+      <div style="flex:2;min-width:240px">
+        <label>資料來源 Worker 網址(選填,留空就用公開代理)</label>
+        <input id="worker" placeholder="https://你的名稱.workers.dev" autocomplete="off">
+      </div>
+      <div style="flex:0 0 auto">
+        <label class="chk" style="margin:0 0 6px"><input type="checkbox" id="auto"> 自動更新,每
+          <input id="autoSec" type="number" min="10" step="5" style="width:66px;padding:5px 7px" placeholder="60"> 秒</label>
+        <span class="muted" id="updated" style="font-size:12px"></span>
+      </div>
+    </div>
+
     <div id="msg" class="err" style="margin-top:10px"></div>
   </div>
 
@@ -237,6 +249,7 @@ function loadState(){
     mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
     gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
+    workerUrl: s.workerUrl||"", auto: !!s.auto, autoSec: s.autoSec||60,
   };
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
@@ -274,18 +287,27 @@ async function getData(raw){
     try{ const j=await (await fetch("/api/quote?symbol="+encodeURIComponent(raw))).json();
          if(j&&j.ok) return j; }catch(e){}
   }
+  const wurl=(state.workerUrl||"").trim().replace(/\/+$/,"");
   for(const sym of normalize(raw)){
+    // 1) 自建 Worker 優先(若有設定):最穩、最快
+    if(wurl){
+      try{
+        const r=await fetch(wurl+"?symbol="+encodeURIComponent(sym)+"&range=5y&interval=1d",{cache:"no-store"});
+        if(r.ok){ const q=parseYahoo(JSON.parse(await r.text()),sym);
+                  if(q&&q.closes&&q.closes.length) return Object.assign({ok:true},q); }
+      }catch(e){}
+    }
+    // 2) 公開 CORS 代理備援
     for(const prox of PROXIES){
       try{
         const r=await fetch(prox(YQ(sym)),{cache:"no-store"});
         if(!r.ok) continue;
-        const d=JSON.parse(await r.text());
-        const q=parseYahoo(d,sym);
+        const q=parseYahoo(JSON.parse(await r.text()),sym);
         if(q&&q.closes&&q.closes.length) return Object.assign({ok:true},q);
       }catch(e){}
     }
   }
-  return {ok:false,error:"自動抓價失敗(可能代理服務忙碌或代碼有誤)。已可改用「手動輸入股價」。"};
+  return {ok:false,error:"自動抓價失敗(Worker/公開代理都沒成功,或代碼有誤)。可改用「手動輸入股價」。"};
 }
 
 // 依所選期間:期間內最高收盤 = 高點;另算當天跌幅(相對昨收)
@@ -516,13 +538,15 @@ function setManual(on){
   $("rangeWrap").classList.toggle("hide",on);
 }
 
-async function query(){
-  $("msg").textContent="";
+function nowStr(){ return new Date().toLocaleTimeString("zh-Hant",{hour12:false}); }
+
+async function query(silent){
+  if(!silent) $("msg").textContent="";
   state.capital=$("capital").value; state.symbol=$("symbol").value.trim(); saveState();
 
   if($("manual").checked){
     const p=parseFloat($("mPrice").value), h=parseFloat($("mHigh").value);
-    if(!(p>0&&h>0)){ $("msg").textContent="請輸入有效的現價與高點。"; return; }
+    if(!(p>0&&h>0)){ if(!silent)$("msg").textContent="請輸入有效的現價與高點。"; return; }
     lastData=null;
     lastQuote={symbol:($("symbol").value.trim()||"手動"),price:p,currency:"",exchange:"手動輸入",
                highRef:h,dropPct:Math.max(0,r2((h-p)/h*100)),todayChangePct:null,todayDropPct:null,rangeLabel:"手動"};
@@ -530,18 +554,34 @@ async function query(){
   }
 
   const sym=$("symbol").value.trim();
-  if(!sym){ $("msg").textContent="請先輸入股票代碼,或勾選手動輸入。"; return; }
-  $("go").disabled=true; $("go").textContent="查詢中…";
+  if(!sym){ if(!silent)$("msg").textContent="請先輸入股票代碼,或勾選手動輸入。"; return; }
+  if(!silent){ $("go").disabled=true; $("go").textContent="查詢中…"; }
   try{
     const j=await getData(sym);
-    if(!j.ok){ lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
-               $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return; }
+    if(!j.ok){
+      if(silent){ $("updated").textContent="更新失敗,沿用上次("+nowStr()+")"; return; }
+      lastData=null; $("quoteCard").classList.add("hide"); $("resultCard").classList.add("hide");
+      $("msg").textContent=j.error||"查詢失敗。"; setManual(true); return;
+    }
     lastData={symbol:j.symbol,price:+j.price,changePct:(j.changePct!=null?+j.changePct:null),
               currency:j.currency||"",exchange:j.exchange||"",ts:j.ts||[],closes:(j.closes||[]).map(Number)};
-    if(!lastData.closes.length){ $("msg").textContent="抓到資料但缺少歷史收盤價,請改用手動輸入。"; setManual(true); return; }
+    if(!lastData.closes.length){ if(!silent){ $("msg").textContent="抓到資料但缺少歷史收盤價,請改用手動輸入。"; setManual(true);} return; }
     computeQuote(); showQuote(); renderAll();
+    $("updated").textContent="最後更新 "+nowStr()+(state.workerUrl?" · Worker":" · 公開代理");
   }finally{
-    $("go").disabled=false; $("go").textContent="查詢並試算";
+    if(!silent){ $("go").disabled=false; $("go").textContent="查詢並試算"; }
+  }
+}
+
+let autoTimer=null;
+function applyAuto(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+  state.auto=$("auto").checked;
+  state.autoSec=Math.max(10, parseInt($("autoSec").value)||60);
+  saveState();
+  if(state.auto){
+    autoTimer=setInterval(()=>{ if(!$("manual").checked && $("symbol").value.trim()) query(true); },
+                          state.autoSec*1000);
   }
 }
 
@@ -549,10 +589,16 @@ async function query(){
 $("symbol").value=state.symbol||"";
 $("capital").value=state.capital||"";
 $("gate").value=(state.gate!=null?state.gate:DEFAULT_GATE);
+$("worker").value=state.workerUrl||"";
+$("auto").checked=!!state.auto;
+$("autoSec").value=state.autoSec||60;
 if(!state.range) state.range="1y";
 renderRangeChips();
-$("go").addEventListener("click",query);
+$("go").addEventListener("click",()=>query(false));
 $("manual").addEventListener("change",e=>setManual(e.target.checked));
+$("worker").addEventListener("change",()=>{ state.workerUrl=$("worker").value.trim(); saveState(); });
+$("auto").addEventListener("change",applyAuto);
+$("autoSec").addEventListener("change",applyAuto);
 ["symbol","capital","mPrice","mHigh"].forEach(id=>
   $(id).addEventListener("keydown",e=>{if(e.key==="Enter")query();}));
 $("capital").addEventListener("input",()=>{ state.capital=$("capital").value; saveState(); if(lastQuote) renderAll(); });
@@ -564,6 +610,8 @@ $("addMult").addEventListener("click",()=>{ const ms=sortedMult(); const last=ms
    ms.push([last+2,1]); state.mult=ms; saveState(); renderAll(); });
 $("resetMult").addEventListener("click",()=>{ state.mult=DEFAULT_MULT.map(r=>r.slice()); saveState(); renderAll(); });
 
+applyAuto();
+if(state.auto && state.symbol && !$("manual").checked) query(false);  // 重新整理後自動恢復更新
 renderAll();
 </script>
 </body>
