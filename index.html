@@ -223,6 +223,7 @@ const DEFAULT_TIERS = [
 const OLD_DEFAULT_TIERS = "[[5,5],[10,10],[15,15],[20,20],[25,20],[30,30]]";  // 舊預設 → 自動升級
 const DEFAULT_MULT  = [[1,1],[3,1.2],[5,1.5]];
 const DEFAULT_GATE  = 1;
+const DEFAULT_WORKER = "https://stock-proxy.fuli62.workers.dev";  // 內建預設 Worker(寫死;欄位清空才會改回公開代理)
 const RANGES = [["1m","近1月",30],["3m","近3月",91],["6m","近6月",182],
                 ["1y","近1年",365],["2y","近2年",730],["5y","近5年",1e9]];
 const LS = "xdxm_state_v3";
@@ -249,7 +250,7 @@ function loadState(){
     mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
     gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
-    workerUrl: s.workerUrl||"", auto: !!s.auto, autoSec: s.autoSec||60,
+    workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER, auto: !!s.auto, autoSec: s.autoSec||60,
   };
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
