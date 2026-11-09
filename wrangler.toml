@@ -1,0 +1,15 @@
+# Wrangler 設定檔 — 用指令列部署 Cloudflare Worker(不必碰網頁控制台)
+#
+# 部署步驟(在本資料夾開終端機):
+#   1. npm i -g wrangler        # 安裝 Wrangler(需先裝 Node.js:https://nodejs.org)
+#   2. npx wrangler login       # 開瀏覽器授權頁按同意(與壞掉的 Workers 介面是不同頁)
+#   3. npx wrangler deploy      # 部署,完成後會印出 Worker 網址
+#
+# 部署成功後,把印出的網址(例 https://stock-proxy.你的帳號.workers.dev)
+# 貼到網頁的「資料來源 Worker 網址」欄位即可。
+#
+# 想改名字:改下面的 name(只能小寫字母、數字、連字號),再重新 deploy。
+
+name = "stock-proxy"
+main = "worker.js"
+compatibility_date = "2024-11-01"
