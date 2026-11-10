@@ -98,7 +98,7 @@
     </div>
 
     <div style="margin-top:14px">
-      <label>標的類型(決定期間級距階數:個股 50 階、ETF 20 階)</label>
+      <label>標的類型(輸入代碼會自動判斷,也可手動切換;個股 50 階、ETF 20 階)</label>
       <div class="chips" id="kindRow"></div>
     </div>
 
@@ -272,6 +272,7 @@ const LS = "xdxm_state_v3";
 let state = loadState();
 let lastData = null;   // {symbol,price,prevClose,currency,exchange,ts[],closes[]}
 let lastQuote = null;  // 依期間算出的 {price,highRef,dropPct,todayDropPct,rangeLabel,...}
+let lastKindSymbol = null;  // 上次自動判斷類型用的代碼(只在換新代碼時自動切換)
 
 const HAS_SERVER = location.protocol==="http:" &&
                    (location.hostname==="127.0.0.1"||location.hostname==="localhost");
@@ -327,7 +328,7 @@ function parseYahoo(data, sym){
     let chgPct = meta.regularMarketChangePercent;
     if(chgPct==null) chgPct = meta.fulldayChangePercent;
     return {symbol:meta.symbol||sym, price:+price, changePct:(chgPct!=null?+chgPct:null),
-            currency:meta.currency||"", exchange:meta.exchangeName||"", ts:t, closes:c};
+            currency:meta.currency||"", exchange:meta.exchangeName||"", instrumentType:meta.instrumentType||"", ts:t, closes:c};
   }catch(e){ return null; }
 }
 async function getData(raw){
@@ -691,6 +692,12 @@ async function query(silent){
               lastData.changePct=r2((rt.price-rt.prevClose)/rt.prevClose*100);
               src="證交所即時"; }
       else src+="(台股即時取用失敗,暫用 Yahoo 延遲價)";
+    }
+    // 依代碼自動判斷 ETF/個股(只在換新代碼時自動切換;手動改過的之後不覆蓋)
+    if(j.symbol !== lastKindSymbol){
+      lastKindSymbol = j.symbol;
+      const detected = (j.instrumentType==="ETF") ? "etf" : "stock";
+      if(detected !== state.kind){ state.kind=detected; state.tiers=defTiers(detected); saveState(); renderKindChips(); }
     }
     computeQuote(); showQuote(); renderAll();
     $("updated").textContent="最後更新 "+nowStr()+" · "+src;

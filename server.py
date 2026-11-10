@@ -85,6 +85,7 @@ def _fetch_one(symbol: str):
                 "changePct": (float(chg) if chg is not None else None),
                 "currency": meta.get("currency", ""),
                 "exchange": meta.get("exchangeName", ""),
+                "instrumentType": meta.get("instrumentType", ""),
                 "ts": ts_out,
                 "closes": cl_out,
             }
