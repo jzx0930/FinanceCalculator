@@ -191,10 +191,6 @@
         </tr>
       </thead>
       <tbody id="tierBody"></tbody>
-      <tfoot>
-        <tr><td colspan="2" class="muted">合計單筆投入</td>
-            <td id="tierSum" class="muted">—</td><td colspan="5"></td></tr>
-      </tfoot>
     </table>
     <div class="toolbar">
       <button class="ghost" id="addRow">＋ 新增一階</button>
@@ -456,8 +452,6 @@ function renderTierTable(){
       `<td><button class="ghost del" data-del="${i}" style="padding:4px 9px">✕</button></td>`;
     body.appendChild(tr);
   });
-  $("tierSum").textContent = sumAlloc+"%";
-  $("tierSum").className = sumAlloc>100 ? "warn" : "muted";
   body.querySelectorAll("input").forEach(inp=>{
     inp.addEventListener("change",()=>{
       const i=+inp.dataset.i, c=+inp.dataset.c;
