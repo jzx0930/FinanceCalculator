@@ -343,8 +343,13 @@ async function getTwRealtime(code){
     if(!r.ok) return null;
     const d=JSON.parse(await r.text());
     const arr=d&&d.msgArray; if(!arr||!arr.length) return null;
-    const m=arr.find(x=>x.z&&x.z!=="-"&&!isNaN(parseFloat(x.z))) || arr[0];  // 挑有成交價的那筆
-    const z=parseFloat(m.z), y=parseFloat(m.y);
+    const m=arr.find(x=>x.c) || arr[0];   // 有股票代號的那筆
+    // 最新成交價:頂層 z 盤中可能是 "-",真正成交價在巢狀 trade.z;再退而求其次用開盤 o
+    const pick=v=>(v&&v!=="-"&&!isNaN(parseFloat(v)))?parseFloat(v):NaN;
+    let z=pick(m.z);
+    if(isNaN(z)&&m.trade) z=pick(m.trade.z);
+    if(isNaN(z)) z=pick(m.o);
+    const y=pick(m.y);
     if(!isNaN(z)&&z>0&&!isNaN(y)&&y>0) return {price:z, prevClose:y};
   }catch(e){}
   return null;
