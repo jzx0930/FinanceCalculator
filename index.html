@@ -97,6 +97,11 @@
       </div>
     </div>
 
+    <div style="margin-top:14px">
+      <label>標的類型(決定期間級距階數:個股 50 階、ETF 20 階)</label>
+      <div class="chips" id="kindRow"></div>
+    </div>
+
     <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路,最穩定;手動模式不計當天跌幅)</label>
     <div id="manualBox" class="row hide" style="margin-top:10px">
       <div><label>現價</label><input id="mPrice" type="number" min="0" step="0.01" placeholder="例如 900"></div>
@@ -237,13 +242,18 @@
    6. 換期間/改級距/改資金/改倍數都用同一份已抓資料即時重算,不重新連線。
    註:高點與今日跌幅都用收盤/昨收,未還原權息,除權息或分割可能偏差。非投資建議。
    ────────────────────────────────────────────────────────────── */
-const DEFAULT_TIERS = [   // 50 階,跌幅 1~50% 每 1% 一階;單筆投入% 指數成長(倍率≈1.08),合計 100%
+const DEFAULT_TIERS_STOCK = [   // 個股:50 階,跌幅 1~50%,指數投入%,合計 100%
   [1,0.2],[2,0.2],[3,0.2],[4,0.2],[5,0.2],[6,0.3],[7,0.3],[8,0.3],[9,0.3],[10,0.3],
   [11,0.4],[12,0.4],[13,0.4],[14,0.5],[15,0.5],[16,0.6],[17,0.6],[18,0.6],[19,0.7],[20,0.8],
   [21,0.8],[22,0.9],[23,0.9],[24,1],[25,1.1],[26,1.2],[27,1.3],[28,1.4],[29,1.5],[30,1.6],
   [31,1.8],[32,1.9],[33,2],[34,2.2],[35,2.4],[36,2.6],[37,2.8],[38,3],[39,3.2],[40,3.5],
   [41,3.8],[42,4.1],[43,4.4],[44,4.8],[45,5.2],[46,5.6],[47,6],[48,6.5],[49,7],[50,7.5]
 ];
+const DEFAULT_TIERS_ETF = [   // ETF:20 階,跌幅 1~20%,指數投入%(一樣倍率≈1.08),合計 100%
+  [1,2.2],[2,2.4],[3,2.5],[4,2.8],[5,3],[6,3.2],[7,3.5],[8,3.7],[9,4],[10,4.4],
+  [11,4.7],[12,5.1],[13,5.5],[14,5.9],[15,6.4],[16,6.9],[17,7.5],[18,8.1],[19,8.7],[20,9.5]
+];
+function defTiers(kind){ return (kind==="etf"?DEFAULT_TIERS_ETF:DEFAULT_TIERS_STOCK).map(r=>r.slice()); }
 const OLD_DEFAULTS = [   // 仍停在舊預設者 → 自動升級為新預設(有自訂過的不動)
   "[[5,5],[10,10],[15,15],[20,20],[25,20],[30,30]]",
   "[[1,1],[2,1],[3,2],[4,2],[5,3],[6,3],[7,4],[8,4],[9,5],[10,5],[15,15],[20,20],[25,15],[30,20]]",
@@ -279,8 +289,10 @@ function loadState(){
   if(tiers && OLD_DEFAULTS.includes(JSON.stringify(tiers))) tiers=null;  // 還在用舊預設 → 升級為新預設
   let mult = (s.mult&&s.mult.length)? s.mult : null;
   if(mult && JSON.stringify(mult)===OLD_MULT) mult=null;                 // 舊倍數預設 → 升級
+  const kind = (s.kind==="etf") ? "etf" : "stock";
   return {
-    tiers: tiers || DEFAULT_TIERS.map(r=>r.slice()),
+    kind,
+    tiers: tiers || defTiers(kind),
     mult:  mult || DEFAULT_MULT.map(r=>r.slice()),
     gate:  (s.gate!=null && !isNaN(s.gate))? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
@@ -621,6 +633,21 @@ function renderRangeChips(){
   });
 }
 
+function renderKindChips(){
+  const box=$("kindRow"); box.innerHTML="";
+  [["stock","個股(50階)"],["etf","ETF(20階)"]].forEach(([k,label])=>{
+    const b=document.createElement("button");
+    b.className="chip"+(state.kind===k?" on":"");
+    b.textContent=label;
+    b.addEventListener("click",()=>{
+      if(k===state.kind) return;
+      if(!confirm("切換成「"+label+"」會把期間級距表換成該類型的預設,目前的級距會被覆蓋。確定?")) return;
+      state.kind=k; state.tiers=defTiers(k); saveState(); renderKindChips(); renderAll();
+    });
+    box.appendChild(b);
+  });
+}
+
 function setManual(on){
   $("manual").checked=on;
   $("manualBox").classList.toggle("hide",!on);
@@ -704,6 +731,7 @@ $("auto").checked=!!state.auto;
 $("autoSec").value=state.autoSec||5;
 if(!state.range) state.range="1y";
 renderRangeChips();
+renderKindChips();
 $("go").addEventListener("click",()=>query(false));
 $("manual").addEventListener("change",e=>setManual(e.target.checked));
 $("worker").addEventListener("change",()=>{ state.workerUrl=$("worker").value.trim(); saveState(); });
@@ -716,7 +744,7 @@ $("gate").addEventListener("input",()=>{ state.gate=parseFloat($("gate").value);
 $("gate").addEventListener("blur",()=>{ if($("gate").value===""||isNaN(parseFloat($("gate").value))){ $("gate").value=DEFAULT_GATE; state.gate=DEFAULT_GATE; saveState(); if(lastQuote) renderResult(); } });
 $("addRow").addEventListener("click",()=>{ const ts=sortedTiers(); const last=ts.length?ts[ts.length-1][0]:0;
    ts.push([last+5,5]); state.tiers=ts; saveState(); renderAll(); });
-$("resetTiers").addEventListener("click",()=>{ state.tiers=DEFAULT_TIERS.map(r=>r.slice()); saveState(); renderAll(); });
+$("resetTiers").addEventListener("click",()=>{ state.tiers=defTiers(state.kind); saveState(); renderAll(); });
 $("addMult").addEventListener("click",()=>{ const ms=sortedMult(); const last=ms.length?ms[ms.length-1][0]:0;
    ms.push([last+2,1]); state.mult=ms; saveState(); renderAll(); });
 $("resetMult").addEventListener("click",()=>{ state.mult=DEFAULT_MULT.map(r=>r.slice()); saveState(); renderAll(); });
