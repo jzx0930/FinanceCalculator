@@ -110,7 +110,7 @@
       </div>
       <div style="flex:0 0 auto">
         <label class="chk" style="margin:0 0 6px"><input type="checkbox" id="auto"> 自動更新,每
-          <input id="autoSec" type="number" min="10" step="5" style="width:66px;padding:5px 7px" placeholder="60"> 秒</label>
+          <input id="autoSec" type="number" min="5" step="5" style="width:66px;padding:5px 7px" placeholder="10"> 秒</label>
         <span class="muted" id="updated" style="font-size:12px"></span>
       </div>
     </div>
@@ -122,9 +122,10 @@
     <div class="quote">
       <div class="q"><span class="k">代碼</span><span class="v" id="qSym">—</span></div>
       <div class="q"><span class="k">現價</span><span class="v big" id="qPrice">—</span></div>
+      <div class="q"><span class="k">昨收</span><span class="v" id="qPrev">—</span></div>
       <div class="q"><span class="k" id="qHighKey">收盤高點</span><span class="v" id="qHigh">—</span></div>
       <div class="q"><span class="k">距高點跌幅</span><span class="v big drop" id="qDrop">—</span></div>
-      <div class="q"><span class="k">今日漲跌</span><span class="v drop" id="qToday">—</span></div>
+      <div class="q"><span class="k">今日漲跌(對昨收)</span><span class="v drop" id="qToday">—</span></div>
       <div class="q"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
     <div class="gauge" id="gauge"></div>
@@ -264,7 +265,8 @@ function loadState(){
     mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
     gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
-    workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER, auto: !!s.auto, autoSec: s.autoSec||60,
+    workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER,
+    auto: (s.auto!=null)? !!s.auto : true, autoSec: s.autoSec||10,
   };
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
@@ -350,9 +352,11 @@ function computeQuote(){
     if(pc&&pc>0) chg=r2((lastData.price-pc)/pc*100);
   }
   const today=(chg==null)? null : Math.max(0, -chg);
+  // 由現價與當日漲跌幅反推昨收(= 現價 ÷ (1+漲跌幅)),顯示出來讓比較基準一目了然
+  const prevC=(chg!=null)? r2(lastData.price/(1+chg/100)) : null;
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
              exchange:lastData.exchange, highRef:hi, dropPct:drop,
-             todayChangePct:chg, todayDropPct:today, rangeLabel:rr[1]};
+             todayChangePct:chg, todayDropPct:today, prevClose:prevC, rangeLabel:rr[1]};
 }
 
 function sortedTiers(){
@@ -523,6 +527,7 @@ function showQuote(){
   $("quoteCard").classList.remove("hide");
   $("qSym").textContent=lastQuote.symbol;
   $("qPrice").textContent=fmt(lastQuote.price,2)+" "+(lastQuote.currency||"");
+  $("qPrev").textContent=(lastQuote.prevClose!=null)? fmt(lastQuote.prevClose,2)+" "+(lastQuote.currency||"") : "—";
   $("qHighKey").textContent="收盤高點("+lastQuote.rangeLabel+")";
   $("qHigh").textContent=fmt(lastQuote.highRef,2)+" "+(lastQuote.currency||"");
   $("qDrop").textContent="-"+lastQuote.dropPct+"%";
@@ -606,7 +611,7 @@ $("capital").value=state.capital||"";
 $("gate").value=(state.gate!=null?state.gate:DEFAULT_GATE);
 $("worker").value=state.workerUrl||"";
 $("auto").checked=!!state.auto;
-$("autoSec").value=state.autoSec||60;
+$("autoSec").value=state.autoSec||10;
 if(!state.range) state.range="1y";
 renderRangeChips();
 $("go").addEventListener("click",()=>query(false));

@@ -40,7 +40,7 @@ export default {
     try {
       const r = await fetch(y, {
         headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
-        cf: { cacheTtl: 20, cacheEverything: true },   // 快取 20 秒,省流量也更快
+        cf: { cacheTtl: 5, cacheEverything: true },   // 只快取 5 秒,支援約 10 秒的即時更新
       });
       const body = await r.text();
       return new Response(body, {
