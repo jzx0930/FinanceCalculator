@@ -97,11 +97,6 @@
       </div>
     </div>
 
-    <div id="rangeWrap" style="margin-top:14px">
-      <label>高點基準期間(點選,可隨時切換,不需重新查詢)</label>
-      <div class="chips" id="rangeRow"></div>
-    </div>
-
     <label class="chk"><input type="checkbox" id="manual"> 改用手動輸入股價(不抓網路,最穩定;手動模式不計當天跌幅)</label>
     <div id="manualBox" class="row hide" style="margin-top:10px">
       <div><label>現價</label><input id="mPrice" type="number" min="0" step="0.01" placeholder="例如 900"></div>
@@ -159,12 +154,16 @@
   <div class="card">
     <label style="font-size:14px;color:var(--fg)">① 期間加碼級距表(距最高收盤價的跌幅 → 單筆投入%,可改,自動存)</label>
     <div class="muted" style="font-size:12px;margin-bottom:6px">
-      「跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
+      「期間跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
+    </div>
+    <div id="rangeWrap" style="margin:4px 0 12px">
+      <label>高點基準期間(決定「期間跌幅」的基準;點選即時重算,不需重新查詢)</label>
+      <div class="chips" id="rangeRow"></div>
     </div>
     <table id="tierTable">
       <thead>
         <tr>
-          <th>階</th><th>跌幅 ≥ (%)</th><th>單筆投入 (%)</th>
+          <th>階</th><th>期間跌幅 ≥ (%)</th><th>單筆投入 (%)</th>
           <th class="bar-cell">相對力度</th>
           <th>此階金額</th><th>約可買(股)</th><th>累計投入(%)</th><th></th>
         </tr>
@@ -179,9 +178,9 @@
       <button class="ghost" id="addRow">＋ 新增一階</button>
       <button class="ghost" id="resetTiers">回復預設級距</button>
     </div>
-  </div>
 
-  <div class="card">
+    <div style="border-top:1px solid var(--line);margin:20px 0 14px"></div>
+
     <label style="font-size:14px;color:var(--fg)">② 當天跌幅條件(閘門＋倍數,相對昨收・盤中即時)</label>
     <div class="muted" style="font-size:12px;margin-bottom:8px">
       今日跌幅沒到「閘門」就今天觀望;到了才用上面的期間級距金額,再乘下面對應的倍數。
@@ -274,7 +273,7 @@ function loadState(){
   return {
     tiers: tiers || DEFAULT_TIERS.map(r=>r.slice()),
     mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
-    gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
+    gate:  (s.gate!=null && !isNaN(s.gate))? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
     workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER,
     auto: (s.auto!=null)? !!s.auto : true, autoSec: s.autoSec||5,
@@ -688,7 +687,7 @@ function applyAuto(){
 // 初始化
 $("symbol").value=state.symbol||"";
 $("capital").value=state.capital||"";
-$("gate").value=(state.gate!=null?state.gate:DEFAULT_GATE);
+$("gate").value=(state.gate!=null && !isNaN(state.gate))?state.gate:DEFAULT_GATE;
 $("worker").value=state.workerUrl||"";
 $("auto").checked=!!state.auto;
 $("autoSec").value=state.autoSec||5;
@@ -703,6 +702,7 @@ $("autoSec").addEventListener("change",applyAuto);
   $(id).addEventListener("keydown",e=>{if(e.key==="Enter")query();}));
 $("capital").addEventListener("input",()=>{ state.capital=$("capital").value; saveState(); if(lastQuote) renderAll(); });
 $("gate").addEventListener("input",()=>{ state.gate=parseFloat($("gate").value); saveState(); if(lastQuote) renderResult(); });
+$("gate").addEventListener("blur",()=>{ if($("gate").value===""||isNaN(parseFloat($("gate").value))){ $("gate").value=DEFAULT_GATE; state.gate=DEFAULT_GATE; saveState(); if(lastQuote) renderResult(); } });
 $("addRow").addEventListener("click",()=>{ const ts=sortedTiers(); const last=ts.length?ts[ts.length-1][0]:0;
    ts.push([last+5,5]); state.tiers=ts; saveState(); renderAll(); });
 $("resetTiers").addEventListener("click",()=>{ state.tiers=DEFAULT_TIERS.map(r=>r.slice()); saveState(); renderAll(); });
