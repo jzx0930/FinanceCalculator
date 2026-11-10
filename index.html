@@ -176,7 +176,8 @@
 
     <label style="font-size:14px;color:var(--fg)">① 期間加碼級距表(距最高收盤價的期間跌幅 → 單筆投入%,可改,自動存)</label>
     <div class="muted" style="font-size:12px;margin-bottom:6px">
-      「期間跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。「今日實投」= 此階金額 × 今日倍率(來自上面②)。各階加總建議 ≤ 100%。
+      「期間跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。「今日實投」= 此階金額 × 今日倍率(來自上面②)。
+      「累計投入」= 從最淺階加到這一階的投入% 總和(= 一路跌到這階、每階都買過後,總共投入了總資金的百分比);各階加總建議 ≤ 100%。
     </div>
     <div id="rangeWrap" style="margin:4px 0 12px">
       <label>高點基準期間(決定「期間跌幅」的基準;點選即時重算,不需重新查詢)</label>
@@ -453,7 +454,7 @@ function renderTierTable(){
       `<td>${capital? fmt(amt,0):"—"}</td>`+
       `<td class="${m>1?'pos':''}">${capital? fmt(actual,0):"—"}</td>`+
       `<td>${shares!=null? fmt(shares,0):"—"}</td>`+
-      `<td>${cum}%</td>`+
+      `<td>${cum}%${capital?` <span class="muted" style="font-size:12px">${fmt(capital*cum/100)}</span>`:""}</td>`+
       `<td><button class="ghost del" data-del="${i}" style="padding:4px 9px">✕</button></td>`;
     body.appendChild(tr);
   });
