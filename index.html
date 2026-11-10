@@ -247,7 +247,10 @@ const OLD_DEFAULTS = [   // 仍停在舊預設者 → 自動升級為新預設(�
   "[[1,1],[2,1],[3,2],[4,2],[5,3],[6,3],[7,4],[8,4],[9,5],[10,5],[15,15],[20,20],[25,15],[30,20]]",
   "[[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],[11,3],[12,3],[13,3],[14,3],[15,3],[16,3],[17,3],[18,3],[19,3],[20,3],[21,6],[22,6],[23,6],[24,6],[25,6],[26,6],[27,6],[28,6],[29,6],[30,6]]"
 ];
-const DEFAULT_MULT  = [[1,1],[3,1.2],[5,1.5]];
+const DEFAULT_MULT  = [   // 10 階:今日跌幅 1~10% → 倍數 ×1 指數成長到 ×2.5
+  [1,1],[2,1.1],[3,1.2],[4,1.4],[5,1.5],[6,1.7],[7,1.9],[8,2.1],[9,2.3],[10,2.5]
+];
+const OLD_MULT = "[[1,1],[3,1.2],[5,1.5]]";   // 舊倍數預設 → 自動升級
 const DEFAULT_GATE  = 1;
 const DEFAULT_WORKER = "https://stock-proxy.fuli62.workers.dev";  // 內建預設 Worker(寫死;欄位清空才會改回公開代理)
 const RANGES = [["1m","近1月",30],["3m","近3月",91],["6m","近6月",182],
@@ -271,9 +274,11 @@ function loadState(){
   try{ s=JSON.parse(localStorage.getItem(LS))||{}; }catch(e){}
   let tiers = (s.tiers&&s.tiers.length)? s.tiers : null;
   if(tiers && OLD_DEFAULTS.includes(JSON.stringify(tiers))) tiers=null;  // 還在用舊預設 → 升級為新預設
+  let mult = (s.mult&&s.mult.length)? s.mult : null;
+  if(mult && JSON.stringify(mult)===OLD_MULT) mult=null;                 // 舊倍數預設 → 升級
   return {
     tiers: tiers || DEFAULT_TIERS.map(r=>r.slice()),
-    mult:  (s.mult &&s.mult.length )? s.mult  : DEFAULT_MULT.map(r=>r.slice()),
+    mult:  mult || DEFAULT_MULT.map(r=>r.slice()),
     gate:  (s.gate!=null && !isNaN(s.gate))? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
     workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER,
