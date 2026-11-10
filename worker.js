@@ -24,6 +24,38 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
 
     const url = new URL(request.url);
+
+    // === 台股即時報價(證交所 MIS)===  用 ?twse=2330
+    const twse = (url.searchParams.get("twse") || "").trim();
+    if (twse) {
+      if (!/^\d{3,7}$/.test(twse)) {
+        return new Response(JSON.stringify({ error: "bad twse" }),
+          { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      const ch = `tse_${twse}.tw|otc_${twse}.tw`;  // 同時查上市與上櫃
+      const mu = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp` +
+                 `?ex_ch=${encodeURIComponent(ch)}&json=1&delay=0&_=${Date.now()}`;
+      try {
+        const r = await fetch(mu, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Referer": "https://mis.twse.com.tw/stock/index.jsp",
+          },
+          cf: { cacheTtl: 3, cacheEverything: true },
+        });
+        const body = await r.text();
+        return new Response(body, {
+          status: r.status,
+          headers: { ...cors, "Content-Type": "application/json; charset=utf-8" },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: String(e) }),
+          { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+    }
+
+    // === 美股 / 歷史日線(Yahoo)===  用 ?symbol=AAPL
     const symbol = (url.searchParams.get("symbol") || "").trim();
     const range = url.searchParams.get("range") || "5y";
     const interval = url.searchParams.get("interval") || "1d";
