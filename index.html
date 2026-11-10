@@ -121,6 +121,7 @@
   <div id="quoteCard" class="card hide">
     <div class="quote">
       <div class="q"><span class="k">代碼</span><span class="v" id="qSym">—</span></div>
+      <div class="q"><span class="k">市場狀態</span><span class="v" id="qMarket" style="font-size:15px">—</span></div>
       <div class="q" style="margin-left:auto"><span class="k">　</span><span class="pill" id="qMeta">—</span></div>
     </div>
     <div class="quote" style="margin-top:16px">
@@ -349,6 +350,24 @@ async function getTwRealtime(code){
   return null;
 }
 
+// 依交易所時區判斷市場狀態(正常盤時段;未含假日)
+function tzNow(tz){
+  const p=new Intl.DateTimeFormat('en-US',{timeZone:tz,weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+  const get=t=>p.find(x=>x.type===t).value;
+  let hh=parseInt(get('hour'),10); if(hh>=24) hh-=24;
+  return {wd:get('weekday'), mins:hh*60+parseInt(get('minute'),10)};
+}
+function getMarketStatus(symbol){
+  const base=(symbol||"").split(".")[0];
+  const isTW=/^\d+$/.test(base);
+  const t=tzNow(isTW?'Asia/Taipei':'America/New_York');
+  if(!['Mon','Tue','Wed','Thu','Fri'].includes(t.wd)) return {open:false,label:"休市(週末)"};
+  if(isTW){ const open=t.mins>=540 && t.mins<810;   // 台股 09:00–13:30
+            return {open, label: open?"盤中":(t.mins<540?"盤前(未開盤)":"已收盤")}; }
+  const open=t.mins>=570 && t.mins<960;             // 美股 09:30–16:00 當地
+  return {open, label: open?"盤中":(t.mins<570?"盤前":"已收盤")};
+}
+
 // 依所選期間:期間內最高收盤 = 高點;另算當天跌幅(相對昨收)
 function computeQuote(){
   if(!lastData) return;
@@ -378,7 +397,8 @@ function computeQuote(){
   const prevC=(chg!=null)? r2(lastData.price/(1+chg/100)) : null;
   lastQuote={symbol:lastData.symbol, price:lastData.price, currency:lastData.currency,
              exchange:lastData.exchange, highRef:hi, dropPct:drop,
-             todayChangePct:chg, todayDropPct:today, prevClose:prevC, rangeLabel:rr[1]};
+             todayChangePct:chg, todayDropPct:today, prevClose:prevC, rangeLabel:rr[1],
+             marketStatus:getMarketStatus(lastData.symbol)};
 }
 
 function sortedTiers(){
@@ -512,10 +532,12 @@ function renderResult(){
     $("rLeft").className = "v "+(left<0?"warn":"");
   }
 
-  // 今日閘門 + 倍數
+  // 今日閘門 + 倍數(含市場狀態)
   const box=$("todayBox"), el=$("rToday");
   const td=lastQuote.todayDropPct, chg=lastQuote.todayChangePct, gate=parseFloat($("gate").value)||0;
   const chgTxt=(chg==null)?"—":(chg<0?("−"+r2(-chg)+"%"):("+"+r2(chg)+"%"));
+  const mkt=lastQuote.marketStatus, liveOk=mkt?mkt.open:true;
+  const msTag=mkt?('<span style="color:'+(mkt.open?"var(--green)":"var(--mut)")+';font-weight:600">【'+mkt.label+(mkt.open?"":"・收盤試算")+'】</span> '):'';
   if(td==null){
     box.className="today-box today-no"; el.className="big-rec muted";
     el.textContent="手動模式或無昨收資料,今日漲跌不納入判斷。";
@@ -523,23 +545,23 @@ function renderResult(){
   }
   if(td<gate){
     box.className="today-box today-no"; el.className="big-rec muted";
-    el.innerHTML=`今日 ${chgTxt} → 未達門檻 ${gate}% → <b>今日觀望,不加碼</b>`;
+    el.innerHTML=msTag+`今日 ${chgTxt} → 未達門檻 ${gate}% → <b>今日觀望,不加碼</b>`;
     return;
   }
   if(activeIdx<0){
     box.className="today-box today-no"; el.className="big-rec muted";
-    el.innerHTML=`今日 ${chgTxt} 達門檻,但距期間高點未達第一階 → <b>無對應加碼金額</b>`;
+    el.innerHTML=msTag+`今日 ${chgTxt} 達門檻,但距期間高點未達第一階 → <b>無對應加碼金額</b>`;
     return;
   }
   const m=multAt(td);
-  box.className="today-box today-ok"; el.className="big-rec pos";
+  box.className="today-box "+(liveOk?"today-ok":"today-no"); el.className="big-rec "+(liveOk?"pos":"muted");
   if(!capital){
-    el.innerHTML=`今日 ${chgTxt} ✓ × ${m} → 以 ${al}% 為基準買入(請輸入資金看金額)`;
+    el.innerHTML=msTag+`今日 ${chgTxt} ✓ × ${m} → 以 ${al}% 為基準買入(請輸入資金看金額)`;
     return;
   }
   let buy=baseAmt*m; const capped=buy>capital; if(capped) buy=capital;
   const shares=(price>0)?Math.floor(buy/price):null;
-  el.innerHTML=`今日 ${chgTxt} ✓ × ${m} → 建議買入 <b>${fmt(buy)} ${cur()}</b>`+
+  el.innerHTML=msTag+`今日 ${chgTxt} ✓ × ${m} → ${liveOk?"建議買入":"試算買入"} <b>${fmt(buy)} ${cur()}</b>`+
       (shares!=null?`(約 ${fmt(shares)} 股)`:"")+
       `　<span class="muted" style="font-size:13px">= 期間基準 ${fmt(baseAmt)} × ${m}${capped?"(已以總資金為上限)":""}</span>`;
 }
@@ -560,6 +582,9 @@ function showQuote(){
   else{ $("qToday").textContent=(_chg<0?("−"+r2(-_chg)):("+"+r2(_chg)))+"%";
         $("qToday").className="v big "+(_chg<0?"drop":"pos"); }
   $("qMeta").textContent=(lastQuote.exchange||"")+(lastQuote.currency?" ・ "+lastQuote.currency:"");
+  const ms=lastQuote.marketStatus;
+  if(ms){ $("qMarket").textContent=(ms.open?"● ":"○ ")+ms.label; $("qMarket").style.color=ms.open?"var(--green)":"var(--mut)"; }
+  else { $("qMarket").textContent="—"; $("qMarket").style.color=""; }
 }
 
 function renderRangeChips(){
