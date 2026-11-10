@@ -152,38 +152,9 @@
   </div>
 
   <div class="card">
-    <label style="font-size:14px;color:var(--fg)">① 期間加碼級距表(距最高收盤價的跌幅 → 單筆投入%,可改,自動存)</label>
-    <div class="muted" style="font-size:12px;margin-bottom:6px">
-      「期間跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。各階加總建議 ≤ 100%。
-    </div>
-    <div id="rangeWrap" style="margin:4px 0 12px">
-      <label>高點基準期間(決定「期間跌幅」的基準;點選即時重算,不需重新查詢)</label>
-      <div class="chips" id="rangeRow"></div>
-    </div>
-    <table id="tierTable">
-      <thead>
-        <tr>
-          <th>階</th><th>期間跌幅 ≥ (%)</th><th>單筆投入 (%)</th>
-          <th class="bar-cell">相對力度</th>
-          <th>此階金額</th><th>約可買(股)</th><th>累計投入(%)</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="tierBody"></tbody>
-      <tfoot>
-        <tr><td colspan="2" class="muted">合計單筆投入</td>
-            <td id="tierSum" class="muted">—</td><td colspan="5"></td></tr>
-      </tfoot>
-    </table>
-    <div class="toolbar">
-      <button class="ghost" id="addRow">＋ 新增一階</button>
-      <button class="ghost" id="resetTiers">回復預設級距</button>
-    </div>
-
-    <div style="border-top:1px solid var(--line);margin:20px 0 14px"></div>
-
     <label style="font-size:14px;color:var(--fg)">② 當天跌幅條件(閘門＋倍數,相對昨收・盤中即時)</label>
     <div class="muted" style="font-size:12px;margin-bottom:8px">
-      今日跌幅沒到「閘門」就今天觀望;到了才用上面的期間級距金額,再乘下面對應的倍數。
+      今日跌幅沒到「閘門」就今天觀望;到了才用下面的期間級距金額,再乘下面對應的倍數。
       <b>把倍數全設成 1 = 純閘門</b>(今日只當開關);設越高 = 大跌日買越多。
     </div>
     <div class="row" style="align-items:flex-end">
@@ -199,6 +170,35 @@
     <div class="toolbar">
       <button class="ghost" id="addMult">＋ 新增一段</button>
       <button class="ghost" id="resetMult">回復預設倍數</button>
+    </div>
+
+    <div style="border-top:1px solid var(--line);margin:20px 0 14px"></div>
+
+    <label style="font-size:14px;color:var(--fg)">① 期間加碼級距表(距最高收盤價的期間跌幅 → 單筆投入%,可改,自動存)</label>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">
+      「期間跌幅≥」= 距所選期間最高收盤價跌到這個幅度;「投入%」= 跨到這一階時,單筆投入總資金的百分比。「今日實投」= 此階金額 × 今日倍率(來自上面②)。各階加總建議 ≤ 100%。
+    </div>
+    <div id="rangeWrap" style="margin:4px 0 12px">
+      <label>高點基準期間(決定「期間跌幅」的基準;點選即時重算,不需重新查詢)</label>
+      <div class="chips" id="rangeRow"></div>
+    </div>
+    <table id="tierTable">
+      <thead>
+        <tr>
+          <th>階</th><th>期間跌幅 ≥ (%)</th><th>單筆投入 (%)</th>
+          <th class="bar-cell">相對力度</th>
+          <th>此階金額</th><th id="thActual">今日實投</th><th>約可買(股)</th><th>累計投入(%)</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tierBody"></tbody>
+      <tfoot>
+        <tr><td colspan="2" class="muted">合計單筆投入</td>
+            <td id="tierSum" class="muted">—</td><td colspan="6"></td></tr>
+      </tfoot>
+    </table>
+    <div class="toolbar">
+      <button class="ghost" id="addRow">＋ 新增一階</button>
+      <button class="ghost" id="resetTiers">回復預設級距</button>
     </div>
   </div>
 
@@ -433,12 +433,16 @@ function renderTierTable(){
   const drop = lastQuote ? lastQuote.dropPct : null;
   const tiers = sortedTiers();
   const maxAlloc = Math.max(1, ...tiers.map(t=>t[1]));
+  const td = lastQuote ? lastQuote.todayDropPct : null;    // 今日跌幅 → 倍率
+  const m = (td!=null) ? multAt(td) : 1;                    // 今日倍率(來自 ②)
+  if($("thActual")) $("thActual").textContent="今日實投(×"+m+")";
   let cum=0, sumAlloc=0, activeIdx=-1;
   tiers.forEach((t,i)=>{ if(drop!=null && drop>=t[0]) activeIdx=i; });
   tiers.forEach((t,i)=>{
     const [th,al]=t; cum+=al; sumAlloc+=al;
     const amt = capital*al/100;
-    const shares = (price&&price>0)? Math.floor(amt/price) : null;
+    const actual = amt*m;                                  // 此階金額 × 今日倍率
+    const shares = (price&&price>0)? Math.floor(actual/price) : null;
     const tr=document.createElement("tr");
     if(i===activeIdx) tr.className="active";
     tr.innerHTML=
@@ -447,6 +451,7 @@ function renderTierTable(){
       `<td><input class="tbl-input" data-i="${i}" data-c="1" type="number" value="${al}"></td>`+
       `<td class="bar-cell"><div class="bar" style="width:${(al/maxAlloc*100).toFixed(0)}%"></div></td>`+
       `<td>${capital? fmt(amt,0):"—"}</td>`+
+      `<td class="${m>1?'pos':''}">${capital? fmt(actual,0):"—"}</td>`+
       `<td>${shares!=null? fmt(shares,0):"—"}</td>`+
       `<td>${cum}%</td>`+
       `<td><button class="ghost del" data-del="${i}" style="padding:4px 9px">✕</button></td>`;
