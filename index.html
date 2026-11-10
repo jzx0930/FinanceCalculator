@@ -70,9 +70,14 @@
   .toolbar{display:flex;gap:8px;margin-top:10px}
   .hide{display:none}
   a{color:var(--accent)}
+  #topbar{position:fixed;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.06);z-index:9999}
+  #topbarFill{height:100%;width:0;border-radius:0 2px 2px 0;
+    background:linear-gradient(90deg,#4ea1ff,#36c689);
+    box-shadow:0 0 10px 1px rgba(78,161,255,.85),0 0 5px rgba(54,198,137,.7)}
 </style>
 </head>
 <body>
+<div id="topbar"><div id="topbarFill"></div></div>
 <div class="wrap">
   <h1>小跌小買・大跌大買</h1>
   <div class="sub">期間看「距最高收盤價的跌幅」決定力度;再用「當天跌幅」當閘門(可加倍)決定今天要不要出手 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
@@ -110,7 +115,7 @@
       </div>
       <div style="flex:0 0 auto">
         <label class="chk" style="margin:0 0 6px"><input type="checkbox" id="auto"> 自動更新,每
-          <input id="autoSec" type="number" min="5" step="5" style="width:66px;padding:5px 7px" placeholder="10"> 秒</label>
+          <input id="autoSec" type="number" min="3" step="1" style="width:66px;padding:5px 7px" placeholder="5"> 秒</label>
         <span class="muted" id="updated" style="font-size:12px"></span>
       </div>
     </div>
@@ -272,7 +277,7 @@ function loadState(){
     gate:  (s.gate!=null)? s.gate : DEFAULT_GATE,
     capital: s.capital||"", symbol: s.symbol||"", range: s.range||"1y",
     workerUrl: (s.workerUrl!=null)? s.workerUrl : DEFAULT_WORKER,
-    auto: (s.auto!=null)? !!s.auto : true, autoSec: s.autoSec||10,
+    auto: (s.auto!=null)? !!s.auto : true, autoSec: s.autoSec||5,
   };
 }
 function saveState(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
@@ -652,20 +657,31 @@ async function query(silent){
     }
     computeQuote(); showQuote(); renderAll();
     $("updated").textContent="最後更新 "+nowStr()+" · "+src;
+    if($("auto").checked && !$("manual").checked) startProgress(state.autoSec);  // 每次更新後進度條歸零重跑
   }finally{
     if(!silent){ $("go").disabled=false; $("go").textContent="查詢並試算"; }
   }
 }
 
 let autoTimer=null;
+function startProgress(sec){               // 進度條歸零後,sec 秒內線性填滿
+  const f=$("topbarFill"); if(!f) return;
+  f.style.transition="none"; f.style.width="0%";
+  void f.offsetWidth;                      // 強制 reflow,確保從 0 重跑
+  f.style.transition="width "+sec+"s linear"; f.style.width="100%";
+}
+function stopProgress(){ const f=$("topbarFill"); if(f){ f.style.transition="none"; f.style.width="0%"; } }
 function applyAuto(){
   if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
   state.auto=$("auto").checked;
-  state.autoSec=Math.max(10, parseInt($("autoSec").value)||60);
+  state.autoSec=Math.max(3, parseInt($("autoSec").value)||5);
   saveState();
   if(state.auto){
+    if($("symbol").value.trim() && !$("manual").checked) startProgress(state.autoSec);
     autoTimer=setInterval(()=>{ if(!$("manual").checked && $("symbol").value.trim()) query(true); },
                           state.autoSec*1000);
+  }else{
+    stopProgress();
   }
 }
 
@@ -675,7 +691,7 @@ $("capital").value=state.capital||"";
 $("gate").value=(state.gate!=null?state.gate:DEFAULT_GATE);
 $("worker").value=state.workerUrl||"";
 $("auto").checked=!!state.auto;
-$("autoSec").value=state.autoSec||10;
+$("autoSec").value=state.autoSec||5;
 if(!state.range) state.range="1y";
 renderRangeChips();
 $("go").addEventListener("click",()=>query(false));
