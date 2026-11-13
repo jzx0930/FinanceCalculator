@@ -70,6 +70,13 @@
   .toolbar{display:flex;gap:8px;margin-top:10px}
   .hide{display:none}
   a{color:var(--accent)}
+  select{background:#0e1620;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 11px;font-size:15px;width:100%}
+  .tabs{display:flex;gap:8px;margin:6px 0 18px}
+  .tab{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:9px 18px;font-size:15px;font-weight:700;cursor:pointer}
+  .tab.on{background:var(--accent);color:#04121f;border-color:var(--accent)}
+  .chklist label{display:flex;gap:9px;align-items:flex-start;padding:7px 0;color:var(--fg);font-size:14px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .chklist input{width:auto;margin-top:3px}
+  .chklist .ci{flex:1}
   #topbar{position:fixed;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.06);z-index:9999}
   #topbarFill{height:100%;width:0;border-radius:0 2px 2px 0;
     background:linear-gradient(90deg,#4ea1ff,#36c689);
@@ -81,6 +88,13 @@
 <div class="wrap">
   <h1>小跌小買・大跌大買</h1>
   <div class="sub">期間看「距最高收盤價的跌幅」決定力度;再用「當天跌幅」當閘門(可加倍)決定今天要不要出手 ─ 台股輸入數字(如 2330),美股輸入代碼(如 AAPL)</div>
+
+  <div class="tabs">
+    <button class="tab on" id="tabBtnCalc">加碼試算</button>
+    <button class="tab" id="tabBtnDisc">交易紀律</button>
+  </div>
+
+  <div id="tabCalc">
 
   <div class="card">
     <div class="row">
@@ -224,6 +238,82 @@
       美股與歷史高點用 Yahoo 財經(皆經你的 Worker 或公開代理轉送),可能延遲、偶有缺漏或忙碌而失敗;抓不到時請用「手動輸入股價」。
       今日漲跌為現價相對昨收,除權息日可能略有偏差;收盤後與非交易時段價格不動屬正常。下單前以券商報價為準。
     </div>
+  </div>
+  </div><!-- /tabCalc -->
+
+  <div id="tabDiscipline" class="hide">
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">① 下單前紀律檢查</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">全部勾選才算通過;項目可自訂,勾選狀態按「開始新的一筆」清空。</div>
+      <div class="chklist" id="chkList"></div>
+      <div class="big-rec" id="chkStatus" style="margin-top:10px">—</div>
+      <div class="toolbar">
+        <button class="ghost" id="chkReset">開始新的一筆(清空勾選)</button>
+        <button class="ghost" id="chkAdd">＋ 新增檢查項</button>
+        <button class="ghost" id="chkRestore">回復預設項目</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">② 回撤斷路器</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">帳戶從高點回撤超過門檻就停手、先檢討再進場。</div>
+      <div class="row">
+        <div><label>帳戶高點權益</label><input id="ddPeak" type="number" placeholder="1000000"></div>
+        <div><label>目前權益</label><input id="ddNow" type="number" placeholder="870000"></div>
+        <div><label>回撤門檻 (%)</label><input id="ddLimit" type="number" placeholder="15"></div>
+        <div><label>觸發後暫停(天)</label><input id="ddPause" type="number" placeholder="5"></div>
+      </div>
+      <div class="big-rec" id="ddStatus" style="margin-top:12px">—</div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">③ 部位計算器(以風險定量)</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">和「加碼試算」分頁不同:這是用「單筆最多願意虧多少」反推買幾股 ─ 股數 = 帳戶 × 風險% ÷ (進場 − 停損)。</div>
+      <div class="row">
+        <div><label>帳戶總額</label><input id="psAcct" type="number" placeholder="1000000"></div>
+        <div><label>單筆風險 (%)</label><input id="psRisk" type="number" step="0.1" placeholder="1"></div>
+        <div><label>進場價</label><input id="psEntry" type="number" step="0.01" placeholder="100"></div>
+        <div><label>停損價</label><input id="psStop" type="number" step="0.01" placeholder="90"></div>
+      </div>
+      <div class="sumline">
+        <div class="q"><span class="k">風險金額</span><span class="v" id="psRiskAmt">—</span></div>
+        <div class="q"><span class="k">每股風險</span><span class="v" id="psPerShare">—</span></div>
+        <div class="q"><span class="k">可買股數</span><span class="v big pos" id="psShares">—</span></div>
+        <div class="q"><span class="k">投入金額</span><span class="v" id="psCost">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">④ 交易日誌(每筆記下來、事後檢討)</label>
+      <div class="row" style="margin-top:8px;align-items:flex-end">
+        <div style="max-width:150px"><label>日期</label><input id="jDate" type="date"></div>
+        <div style="max-width:110px"><label>代碼</label><input id="jSym" placeholder="2330"></div>
+        <div style="max-width:90px"><label>動作</label><select id="jAct"><option value="買">買</option><option value="賣">賣</option></select></div>
+        <div style="max-width:110px"><label>價格</label><input id="jPrice" type="number" step="0.01"></div>
+        <div style="max-width:100px"><label>股數</label><input id="jQty" type="number"></div>
+        <div style="min-width:160px;flex:2"><label>理由/心得</label><input id="jNote" placeholder="為什麼進出、當下想法"></div>
+        <div style="flex:0 0 auto"><button id="jAdd">加入</button></div>
+      </div>
+      <table id="jTable" style="margin-top:12px">
+        <thead><tr><th>日期</th><th>代碼</th><th>動作</th><th>價格</th><th>股數</th><th>理由/心得</th><th></th></tr></thead>
+        <tbody id="jBody"></tbody>
+      </table>
+      <div class="muted" id="jEmpty" style="font-size:13px;margin-top:6px">還沒有紀錄。下單後回來記一筆。</div>
+      <div class="toolbar">
+        <button class="ghost" id="jExport">匯出 CSV</button>
+        <button class="ghost" id="jClear">清空日誌</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="disc">
+        此分頁的紀律工具概念來自 GitHub 開源專案 <b>tradermonty/claude-trading-skills</b>(MIT),由 homuchen.build.ai 在 Threads 分享整理。
+        核心主張:AI 在交易的價值不是幫你選會漲的股,而是把流程結構化、<b>擋住自己</b>——下單前檢查、虧到程度就斷電、先算好部位、每筆都記錄檢討。
+        這裡做成純前端工具,資料只存在你的瀏覽器。以上為紀律輔助,<b>非投資建議</b>。
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -759,6 +849,120 @@ $("resetMult").addEventListener("click",()=>{ state.mult=DEFAULT_MULT.map(r=>r.s
 applyAuto();
 if(state.auto && state.symbol && !$("manual").checked) query(false);  // 重新整理後自動恢復更新
 renderAll();
+
+/* ===================== 交易紀律分頁 ===================== */
+const DS_LS="xdxm_disc_v1";
+const DEFAULT_CHECK=[
+  "這筆是計畫內的加碼/進場,不是臨時起意",
+  "已確認標的基本面與近期新聞沒有重大利空",
+  "投入金額在我設定的級距與資金上限內",
+  "不是在恐慌或貪婪的情緒下做的決定",
+  "這檔加上總部位沒有過度集中",
+  "已想好停損或續跌時的下一步"
+];
+let dstate=loadDisc();
+function loadDisc(){
+  let s={}; try{ s=JSON.parse(localStorage.getItem(DS_LS))||{}; }catch(e){}
+  return { check:(s.check&&s.check.length)?s.check:DEFAULT_CHECK.slice(), dd:s.dd||{}, ps:s.ps||{}, journal:s.journal||[] };
+}
+function saveDisc(){ try{ localStorage.setItem(DS_LS, JSON.stringify(dstate)); }catch(e){} }
+
+function showTab(which){
+  const calc=which!=="disc";
+  $("tabCalc").classList.toggle("hide",!calc);
+  $("tabDiscipline").classList.toggle("hide",calc);
+  $("tabBtnCalc").classList.toggle("on",calc);
+  $("tabBtnDisc").classList.toggle("on",!calc);
+  try{ localStorage.setItem("xdxm_tab", calc?"calc":"disc"); }catch(e){}
+}
+$("tabBtnCalc").addEventListener("click",()=>showTab("calc"));
+$("tabBtnDisc").addEventListener("click",()=>showTab("disc"));
+
+// ① 下單前紀律檢查
+let chkState=[];
+function renderChk(){
+  const box=$("chkList"); box.innerHTML="";
+  dstate.check.forEach((txt,i)=>{
+    if(chkState[i]===undefined) chkState[i]=false;
+    const lab=document.createElement("label");
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=chkState[i];
+    cb.addEventListener("change",()=>{ chkState[i]=cb.checked; chkStatus(); });
+    const txtin=document.createElement("input"); txtin.className="ci tbl-input"; txtin.style.width="100%"; txtin.style.textAlign="left"; txtin.value=txt;
+    txtin.addEventListener("change",()=>{ dstate.check[i]=txtin.value; saveDisc(); });
+    const del=document.createElement("button"); del.className="ghost"; del.textContent="✕"; del.style.padding="2px 8px";
+    del.addEventListener("click",()=>{ dstate.check.splice(i,1); chkState.splice(i,1); saveDisc(); renderChk(); });
+    lab.appendChild(cb); lab.appendChild(txtin); lab.appendChild(del); box.appendChild(lab);
+  });
+  chkStatus();
+}
+function chkStatus(){
+  const n=dstate.check.length, done=chkState.filter(Boolean).length, el=$("chkStatus");
+  if(n>0 && done>=n){ el.className="big-rec pos"; el.style.color=""; el.textContent="✅ 全部通過 — 可依計畫下單"; }
+  else{ el.className="big-rec"; el.style.color="var(--amber)"; el.textContent="⛔ 還有 "+(n-done)+" 項未勾 — 先別下單"; }
+}
+$("chkReset").addEventListener("click",()=>{ chkState=dstate.check.map(()=>false); renderChk(); });
+$("chkAdd").addEventListener("click",()=>{ dstate.check.push("新的檢查項目"); chkState.push(false); saveDisc(); renderChk(); });
+$("chkRestore").addEventListener("click",()=>{ dstate.check=DEFAULT_CHECK.slice(); chkState=dstate.check.map(()=>false); saveDisc(); renderChk(); });
+
+// ② 回撤斷路器
+function bindNum(id,obj,key,after){ const el=$(id); if(obj[key]!=null) el.value=obj[key];
+  el.addEventListener("input",()=>{ obj[key]=el.value; saveDisc(); if(after) after(); }); }
+function computeDD(){
+  const peak=parseFloat($("ddPeak").value), now=parseFloat($("ddNow").value);
+  const lim=parseFloat($("ddLimit").value)||15, pause=parseFloat($("ddPause").value)||5, el=$("ddStatus");
+  if(!(peak>0)||!(now>=0)){ el.className="big-rec muted"; el.style.color=""; el.textContent="輸入高點與目前權益以計算回撤。"; return; }
+  const dd=Math.max(0,(peak-now)/peak*100);
+  if(dd>=lim){ el.className="big-rec"; el.style.color="var(--red)";
+    el.innerHTML="🛑 斷路器觸發:回撤 "+dd.toFixed(1)+"% ≥ 門檻 "+lim+"% → <b>暫停新倉 "+pause+" 天,先檢討</b>"; }
+  else{ el.className="big-rec pos"; el.style.color=""; el.innerHTML="✅ 回撤 "+dd.toFixed(1)+"%,未達門檻 "+lim+"%"; }
+}
+
+// ③ 部位計算器(風險法)
+function computePS(){
+  const acct=parseFloat($("psAcct").value)||0, risk=parseFloat($("psRisk").value)||0;
+  const entry=parseFloat($("psEntry").value)||0, stop=parseFloat($("psStop").value)||0;
+  const riskAmt=acct*risk/100, per=Math.abs(entry-stop);
+  $("psRiskAmt").textContent=(acct&&risk)? fmt(riskAmt,0):"—";
+  $("psPerShare").textContent=per? fmt(per,2):"—";
+  if(riskAmt>0 && per>0 && entry>0){ const sh=Math.floor(riskAmt/per);
+    $("psShares").textContent=fmt(sh,0)+" 股"; $("psCost").textContent=fmt(sh*entry,0); }
+  else{ $("psShares").textContent="—"; $("psCost").textContent="—"; }
+}
+
+// ④ 交易日誌
+function renderJournal(){
+  const body=$("jBody"); body.innerHTML=""; const esc=s=>(s==null?"":String(s)).replace(/</g,"&lt;");
+  $("jEmpty").style.display=dstate.journal.length?"none":"block";
+  dstate.journal.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML="<td>"+esc(r.date)+"</td><td>"+esc(r.sym)+"</td><td>"+esc(r.act)+"</td><td>"+esc(r.price)+"</td><td>"+esc(r.qty)+"</td>"+
+      "<td style='text-align:left'>"+esc(r.note)+"</td><td><button class='ghost jdel' data-i='"+i+"' style='padding:4px 9px'>✕</button></td>";
+    body.appendChild(tr);
+  });
+  body.querySelectorAll(".jdel").forEach(b=>b.addEventListener("click",()=>{ dstate.journal.splice(+b.dataset.i,1); saveDisc(); renderJournal(); }));
+}
+$("jAdd").addEventListener("click",()=>{
+  const rec={date:$("jDate").value||new Date().toISOString().slice(0,10), sym:$("jSym").value.trim(),
+             act:$("jAct").value, price:$("jPrice").value, qty:$("jQty").value, note:$("jNote").value.trim()};
+  if(!rec.sym && !rec.price){ return; }
+  dstate.journal.unshift(rec); saveDisc(); renderJournal();
+  $("jSym").value=""; $("jPrice").value=""; $("jQty").value=""; $("jNote").value="";
+});
+$("jClear").addEventListener("click",()=>{ if(confirm("確定清空所有交易日誌?")){ dstate.journal=[]; saveDisc(); renderJournal(); } });
+$("jExport").addEventListener("click",()=>{
+  const rows=[["日期","代碼","動作","價格","股數","理由/心得"]].concat(dstate.journal.map(r=>[r.date,r.sym,r.act,r.price,r.qty,r.note]));
+  const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c==null?"":c).replace(/"/g,'""')+'"').join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="trade_journal.csv"; a.click();
+});
+
+renderChk();
+bindNum("ddPeak",dstate.dd,"peak",computeDD); bindNum("ddNow",dstate.dd,"now",computeDD);
+bindNum("ddLimit",dstate.dd,"limit",computeDD); bindNum("ddPause",dstate.dd,"pause",computeDD); computeDD();
+bindNum("psAcct",dstate.ps,"acct",computePS); bindNum("psRisk",dstate.ps,"risk",computePS);
+bindNum("psEntry",dstate.ps,"entry",computePS); bindNum("psStop",dstate.ps,"stop",computePS); computePS();
+if(!$("jDate").value) $("jDate").value=new Date().toISOString().slice(0,10);
+renderJournal();
+try{ if(localStorage.getItem("xdxm_tab")==="disc") showTab("disc"); }catch(e){}
 </script>
 </body>
 </html>
