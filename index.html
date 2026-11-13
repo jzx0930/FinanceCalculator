@@ -257,24 +257,37 @@
 
     <div class="card">
       <label style="font-size:15px;font-weight:700;color:var(--fg)">② 回撤斷路器</label>
-      <div class="muted" style="font-size:12px;margin:4px 0 10px">帳戶從高點回撤超過門檻就停手、先檢討再進場。</div>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">用下方交易日誌的「已實現損益」算日/週/月虧損與連虧,超過門檻就建議停手(對齊 drawdown-circuit-breaker)。</div>
       <div class="row">
-        <div><label>帳戶高點權益</label><input id="ddPeak" type="number" placeholder="1000000"></div>
-        <div><label>目前權益</label><input id="ddNow" type="number" placeholder="870000"></div>
-        <div><label>回撤門檻 (%)</label><input id="ddLimit" type="number" placeholder="15"></div>
-        <div><label>觸發後暫停(天)</label><input id="ddPause" type="number" placeholder="5"></div>
+        <div><label>帳戶總額</label><input id="ddAcct" type="number" placeholder="1000000"></div>
+        <div><label>日虧上限 (%)</label><input id="ddDaily" type="number" step="0.1" placeholder="2"></div>
+        <div><label>週虧上限 (%)</label><input id="ddWeekly" type="number" step="0.1" placeholder="5"></div>
+        <div><label>月虧上限 (%)</label><input id="ddMonthly" type="number" step="0.1" placeholder="8"></div>
+        <div><label>連虧幾筆→冷卻</label><input id="ddStreak" type="number" placeholder="2"></div>
       </div>
       <div class="big-rec" id="ddStatus" style="margin-top:12px">—</div>
+      <div class="muted" id="ddDetail" style="font-size:12px;margin-top:6px"></div>
     </div>
 
     <div class="card">
       <label style="font-size:15px;font-weight:700;color:var(--fg)">③ 部位計算器(以風險定量)</label>
-      <div class="muted" style="font-size:12px;margin:4px 0 10px">和「加碼試算」分頁不同:這是用「單筆最多願意虧多少」反推買幾股 ─ 股數 = 帳戶 × 風險% ÷ (進場 − 停損)。</div>
-      <div class="row">
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">用「單筆最多願意虧多少」反推買幾股。三種定停損法:固定停損價、ATR 波動、Kelly(由勝率/賠率算最佳風險%)。對齊 position-sizer。</div>
+      <div class="chips" id="psMethodRow"></div>
+      <div class="row" style="margin-top:12px">
         <div><label>帳戶總額</label><input id="psAcct" type="number" placeholder="1000000"></div>
-        <div><label>單筆風險 (%)</label><input id="psRisk" type="number" step="0.1" placeholder="1"></div>
+        <div id="psRiskWrap"><label>單筆風險 (%)</label><input id="psRisk" type="number" step="0.1" placeholder="1"></div>
         <div><label>進場價</label><input id="psEntry" type="number" step="0.01" placeholder="100"></div>
-        <div><label>停損價</label><input id="psStop" type="number" step="0.01" placeholder="90"></div>
+        <div class="psFixed"><label>停損價</label><input id="psStop" type="number" step="0.01" placeholder="90"></div>
+        <div class="psAtr hide"><label>ATR</label><input id="psAtr" type="number" step="0.01" placeholder="3.2"></div>
+        <div class="psAtr hide"><label>ATR 倍數</label><input id="psAtrMult" type="number" step="0.1" placeholder="2"></div>
+        <div class="psKelly hide"><label>勝率 (%)</label><input id="psWin" type="number" step="1" placeholder="55"></div>
+        <div class="psKelly hide"><label>平均賺(R)</label><input id="psAvgWin" type="number" step="0.1" placeholder="2.5"></div>
+        <div class="psKelly hide"><label>平均賠(R)</label><input id="psAvgLoss" type="number" step="0.1" placeholder="1"></div>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <div><label>單檔上限 (%帳戶,選填)</label><input id="psMaxPos" type="number" step="1" placeholder="不限"></div>
+        <div><label>產業上限 (%,選填)</label><input id="psMaxSector" type="number" step="1" placeholder="不限"></div>
+        <div><label>目前該產業曝險 (%,選填)</label><input id="psCurSector" type="number" step="1" placeholder="0"></div>
       </div>
       <div class="sumline">
         <div class="q"><span class="k">風險金額</span><span class="v" id="psRiskAmt">—</span></div>
@@ -282,6 +295,7 @@
         <div class="q"><span class="k">可買股數</span><span class="v big pos" id="psShares">—</span></div>
         <div class="q"><span class="k">投入金額</span><span class="v" id="psCost">—</span></div>
       </div>
+      <div class="muted" id="psNote" style="font-size:12px;margin-top:6px"></div>
     </div>
 
     <div class="card">
@@ -292,11 +306,13 @@
         <div style="max-width:90px"><label>動作</label><select id="jAct"><option value="買">買</option><option value="賣">賣</option></select></div>
         <div style="max-width:110px"><label>價格</label><input id="jPrice" type="number" step="0.01"></div>
         <div style="max-width:100px"><label>股數</label><input id="jQty" type="number"></div>
-        <div style="min-width:160px;flex:2"><label>理由/心得</label><input id="jNote" placeholder="為什麼進出、當下想法"></div>
+        <div style="max-width:120px"><label>損益(平倉填)</label><input id="jPnl" type="number" step="0.01" placeholder="賺+ / 賠-"></div>
+        <div style="min-width:150px;flex:2"><label>理由/心得</label><input id="jNote" placeholder="為什麼進出、當下想法"></div>
         <div style="flex:0 0 auto"><button id="jAdd">加入</button></div>
       </div>
+      <div class="muted" style="font-size:12px;margin-top:6px">「損益」是平倉後的已實現損益(賺填正、賠填負),② 回撤斷路器會用它算日/週/月虧損與連虧。</div>
       <table id="jTable" style="margin-top:12px">
-        <thead><tr><th>日期</th><th>代碼</th><th>動作</th><th>價格</th><th>股數</th><th>理由/心得</th><th></th></tr></thead>
+        <thead><tr><th>日期</th><th>代碼</th><th>動作</th><th>價格</th><th>股數</th><th>損益</th><th>理由/心得</th><th></th></tr></thead>
         <tbody id="jBody"></tbody>
       </table>
       <div class="muted" id="jEmpty" style="font-size:13px;margin-top:6px">還沒有紀錄。下單後回來記一筆。</div>
@@ -307,8 +323,17 @@
     </div>
 
     <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">⑤ 市場寬度(市場健康快篩)</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">「有幾成股票站上自己的 200 日均線」。指數很強但寬度低 = 多半被權值股撐住、多數股票沒跟上,風險較高。這裡是單因子快速判讀;完整 6 因子分數與台股自動資料需跑作者的 <b>tw-market-breadth</b> skill(FinMind)。</div>
+      <div class="row">
+        <div style="max-width:220px"><label>站上 200 日線比例 (%)</label><input id="mbPct" type="number" step="0.1" placeholder="例如 23.5"></div>
+      </div>
+      <div class="big-rec" id="mbStatus" style="margin-top:10px">—</div>
+    </div>
+
+    <div class="card">
       <div class="disc">
-        此分頁的紀律工具概念來自 GitHub 開源專案 <b>tradermonty/claude-trading-skills</b>(MIT),由 homuchen.build.ai 在 Threads 分享整理。
+        此分頁的紀律工具概念來自 GitHub 開源專案 <b>tradermonty/claude-trading-skills</b>(MIT),由 homuchen.build.ai 在 Threads 與部落格分享整理(含台股版 market-breadth)。
         核心主張:AI 在交易的價值不是幫你選會漲的股,而是把流程結構化、<b>擋住自己</b>——下單前檢查、虧到程度就斷電、先算好部位、每筆都記錄檢討。
         這裡做成純前端工具,資料只存在你的瀏覽器。以上為紀律輔助,<b>非投資建議</b>。
       </div>
@@ -852,18 +877,25 @@ renderAll();
 
 /* ===================== 交易紀律分頁 ===================== */
 const DS_LS="xdxm_disc_v1";
-const DEFAULT_CHECK=[
-  "這筆是計畫內的加碼/進場,不是臨時起意",
-  "已確認標的基本面與近期新聞沒有重大利空",
-  "投入金額在我設定的級距與資金上限內",
-  "不是在恐慌或貪婪的情緒下做的決定",
-  "這檔加上總部位沒有過度集中",
-  "已想好停損或續跌時的下一步"
+const DEFAULT_CHECK=[   // 對齊 pre-trade-discipline-gate 的實際關卡
+  "進場點已寫在我的交易計畫裡(不是臨時起意)",
+  "停損價已事先設定好",
+  "部位大小在計畫內",
+  "實際風險金額 ≤ 當初計畫的風險金額",
+  "不是在剛虧損後的『復仇』情緒窗口內",
+  "回撤斷路器目前未觸發(未 HALTED / 冷卻)"
 ];
+const OLD_CHECK=JSON.stringify([
+  "這筆是計畫內的加碼/進場,不是臨時起意","已確認標的基本面與近期新聞沒有重大利空",
+  "投入金額在我設定的級距與資金上限內","不是在恐慌或貪婪的情緒下做的決定",
+  "這檔加上總部位沒有過度集中","已想好停損或續跌時的下一步"
+]);
 let dstate=loadDisc();
 function loadDisc(){
   let s={}; try{ s=JSON.parse(localStorage.getItem(DS_LS))||{}; }catch(e){}
-  return { check:(s.check&&s.check.length)?s.check:DEFAULT_CHECK.slice(), dd:s.dd||{}, ps:s.ps||{}, journal:s.journal||[] };
+  let check=(s.check&&s.check.length)?s.check:null;
+  if(check && JSON.stringify(check)===OLD_CHECK) check=null;   // 舊預設清單 → 自動升級
+  return { check:check||DEFAULT_CHECK.slice(), dd:s.dd||{}, ps:s.ps||{}, journal:s.journal||[], mb:s.mb||{} };
 }
 function saveDisc(){ try{ localStorage.setItem(DS_LS, JSON.stringify(dstate)); }catch(e){} }
 
@@ -904,29 +936,74 @@ $("chkReset").addEventListener("click",()=>{ chkState=dstate.check.map(()=>false
 $("chkAdd").addEventListener("click",()=>{ dstate.check.push("新的檢查項目"); chkState.push(false); saveDisc(); renderChk(); });
 $("chkRestore").addEventListener("click",()=>{ dstate.check=DEFAULT_CHECK.slice(); chkState=dstate.check.map(()=>false); saveDisc(); renderChk(); });
 
-// ② 回撤斷路器
+// ② 回撤斷路器(日/週/月已實現虧損 + 連虧冷卻,來源=交易日誌損益)
 function bindNum(id,obj,key,after){ const el=$(id); if(obj[key]!=null) el.value=obj[key];
   el.addEventListener("input",()=>{ obj[key]=el.value; saveDisc(); if(after) after(); }); }
 function computeDD(){
-  const peak=parseFloat($("ddPeak").value), now=parseFloat($("ddNow").value);
-  const lim=parseFloat($("ddLimit").value)||15, pause=parseFloat($("ddPause").value)||5, el=$("ddStatus");
-  if(!(peak>0)||!(now>=0)){ el.className="big-rec muted"; el.style.color=""; el.textContent="輸入高點與目前權益以計算回撤。"; return; }
-  const dd=Math.max(0,(peak-now)/peak*100);
-  if(dd>=lim){ el.className="big-rec"; el.style.color="var(--red)";
-    el.innerHTML="🛑 斷路器觸發:回撤 "+dd.toFixed(1)+"% ≥ 門檻 "+lim+"% → <b>暫停新倉 "+pause+" 天,先檢討</b>"; }
-  else{ el.className="big-rec pos"; el.style.color=""; el.innerHTML="✅ 回撤 "+dd.toFixed(1)+"%,未達門檻 "+lim+"%"; }
+  const el=$("ddStatus"), det=$("ddDetail");
+  const acct=parseFloat($("ddAcct").value)||0;
+  const dL=parseFloat($("ddDaily").value)||2, wL=parseFloat($("ddWeekly").value)||5, mL=parseFloat($("ddMonthly").value)||8;
+  const streakN=parseInt($("ddStreak").value)||2;
+  if(!acct){ el.className="big-rec muted"; el.style.color=""; el.textContent="輸入帳戶總額,下方日誌填損益後即可判斷。"; det.textContent=""; return; }
+  const closed=dstate.journal.filter(r=>!isNaN(parseFloat(r.pnl))).map(r=>({d:r.date||"",p:parseFloat(r.pnl)}));
+  const now=new Date(), todayS=now.toISOString().slice(0,10);
+  const d0=new Date(now); d0.setHours(0,0,0,0);
+  const weekAgo=new Date(d0); weekAgo.setDate(weekAgo.getDate()-6);
+  const mStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const sumFrom=f=>closed.filter(x=>{const dd=new Date(x.d);return !isNaN(dd)&&dd>=f;}).reduce((s,x)=>s+x.p,0);
+  const dayPnl=closed.filter(x=>x.d===todayS).reduce((s,x)=>s+x.p,0);
+  const weekPnl=sumFrom(weekAgo), monthPnl=sumFrom(mStart);
+  let streak=0; for(const x of closed){ if(x.p<0) streak++; else break; }
+  const halts=[];
+  if(dayPnl<=-(acct*dL/100)) halts.push("當日虧 "+fmt(-dayPnl,0)+" ≥ "+dL+"%");
+  if(weekPnl<=-(acct*wL/100)) halts.push("近7日虧 "+fmt(-weekPnl,0)+" ≥ "+wL+"%");
+  if(monthPnl<=-(acct*mL/100)) halts.push("本月虧 "+fmt(-monthPnl,0)+" ≥ "+mL+"%");
+  det.textContent="當日 "+fmt(dayPnl,0)+" ・ 近7日 "+fmt(weekPnl,0)+" ・ 本月 "+fmt(monthPnl,0)+" ・ 目前連虧 "+streak+" 筆";
+  if(halts.length){ el.className="big-rec"; el.style.color="var(--red)"; el.innerHTML="🛑 HALTED — "+halts.join("; ")+" → <b>停止新倉,先檢討</b>"; }
+  else if(streak>=streakN){ el.className="big-rec"; el.style.color="var(--amber)"; el.innerHTML="🟠 COOLDOWN — 連虧 "+streak+" 筆 → <b>暫停新倉、檢討近期虧損</b>"; }
+  else{ el.className="big-rec pos"; el.style.color=""; el.textContent="✅ TRADING_ALLOWED — 未觸發任何限制"; }
 }
 
-// ③ 部位計算器(風險法)
+// ③ 部位計算器(固定停損 / ATR / Kelly + 單檔、產業上限)
+function psMethod(){ return dstate.ps.method||"fixed"; }
+function renderPsMethod(){
+  const box=$("psMethodRow"); box.innerHTML="";
+  [["fixed","固定停損價"],["atr","ATR 波動"],["kelly","Kelly"]].forEach(([k,label])=>{
+    const b=document.createElement("button"); b.className="chip"+(psMethod()===k?" on":""); b.textContent=label;
+    b.addEventListener("click",()=>{ dstate.ps.method=k; saveDisc(); renderPsMethod(); togglePsFields(); computePS(); });
+    box.appendChild(b);
+  });
+}
+function togglePsFields(){
+  const m=psMethod();
+  document.querySelectorAll(".psFixed").forEach(e=>e.classList.toggle("hide",m!=="fixed"));
+  document.querySelectorAll(".psAtr").forEach(e=>e.classList.toggle("hide",m!=="atr"));
+  document.querySelectorAll(".psKelly").forEach(e=>e.classList.toggle("hide",m!=="kelly"));
+  $("psRiskWrap").classList.toggle("hide",m==="kelly");   // Kelly 自動算風險%
+}
 function computePS(){
-  const acct=parseFloat($("psAcct").value)||0, risk=parseFloat($("psRisk").value)||0;
-  const entry=parseFloat($("psEntry").value)||0, stop=parseFloat($("psStop").value)||0;
-  const riskAmt=acct*risk/100, per=Math.abs(entry-stop);
-  $("psRiskAmt").textContent=(acct&&risk)? fmt(riskAmt,0):"—";
+  const acct=parseFloat($("psAcct").value)||0, entry=parseFloat($("psEntry").value)||0, m=psMethod();
+  let riskPct=parseFloat($("psRisk").value)||0, per=0, note="";
+  if(m==="fixed"){ per=Math.abs(entry-(parseFloat($("psStop").value)||0)); }
+  else if(m==="atr"){ const atr=parseFloat($("psAtr").value)||0, mult=parseFloat($("psAtrMult").value)||2;
+    per=atr*mult; if(per&&entry) note="停損距離 = ATR "+atr+" × "+mult+" = "+fmt(per,2)+"(停損約 "+fmt(entry-per,2)+")"; }
+  else if(m==="kelly"){ const w=(parseFloat($("psWin").value)||0)/100, aw=parseFloat($("psAvgWin").value)||0, al=parseFloat($("psAvgLoss").value)||0;
+    if(w>0&&al>0){ const R=aw/al; let f=Math.max(0,w-(1-w)/R); riskPct=Math.round(f*1000)/10;
+      note="Kelly 建議單筆風險 ≈ "+riskPct+"%(勝率"+(w*100).toFixed(0)+"%、賠率"+R.toFixed(2)+");實務常取半 Kelly、別超過 2~3%"; }
+    per=Math.abs(entry-(parseFloat($("psStop").value)||0)); }
+  const riskAmt=acct*riskPct/100;
+  $("psRiskAmt").textContent=(acct&&riskPct)? fmt(riskAmt,0):"—";
   $("psPerShare").textContent=per? fmt(per,2):"—";
-  if(riskAmt>0 && per>0 && entry>0){ const sh=Math.floor(riskAmt/per);
-    $("psShares").textContent=fmt(sh,0)+" 股"; $("psCost").textContent=fmt(sh*entry,0); }
+  let sh=null, bind="";
+  if(riskAmt>0 && per>0 && entry>0){
+    sh=Math.floor(riskAmt/per);
+    const maxPos=parseFloat($("psMaxPos").value), maxSec=parseFloat($("psMaxSector").value), curSec=parseFloat($("psCurSector").value)||0;
+    if(maxPos>0){ const cap=Math.floor(acct*maxPos/100/entry); if(cap<sh){ sh=cap; bind="單檔上限 "+maxPos+"%"; } }
+    if(maxSec>0){ const cap2=Math.floor(Math.max(0,(maxSec-curSec))/100*acct/entry); if(cap2<sh){ sh=cap2; bind="產業上限 "+maxSec+"%(已用 "+curSec+"%)"; } }
+  }
+  if(sh!=null){ $("psShares").textContent=fmt(sh,0)+" 股"; $("psCost").textContent=fmt(sh*entry,0); }
   else{ $("psShares").textContent="—"; $("psCost").textContent="—"; }
+  $("psNote").textContent=(bind?"⚠ 受限於"+bind+"。 ":"")+note;
 }
 
 // ④ 交易日誌
@@ -935,33 +1012,47 @@ function renderJournal(){
   $("jEmpty").style.display=dstate.journal.length?"none":"block";
   dstate.journal.forEach((r,i)=>{
     const tr=document.createElement("tr");
+    const pv=parseFloat(r.pnl), pTxt=isNaN(pv)?"":fmt(pv,0), pCls=pv>0?"pos":(pv<0?"drop":"");
     tr.innerHTML="<td>"+esc(r.date)+"</td><td>"+esc(r.sym)+"</td><td>"+esc(r.act)+"</td><td>"+esc(r.price)+"</td><td>"+esc(r.qty)+"</td>"+
-      "<td style='text-align:left'>"+esc(r.note)+"</td><td><button class='ghost jdel' data-i='"+i+"' style='padding:4px 9px'>✕</button></td>";
+      "<td class='"+pCls+"'>"+pTxt+"</td><td style='text-align:left'>"+esc(r.note)+"</td><td><button class='ghost jdel' data-i='"+i+"' style='padding:4px 9px'>✕</button></td>";
     body.appendChild(tr);
   });
-  body.querySelectorAll(".jdel").forEach(b=>b.addEventListener("click",()=>{ dstate.journal.splice(+b.dataset.i,1); saveDisc(); renderJournal(); }));
+  body.querySelectorAll(".jdel").forEach(b=>b.addEventListener("click",()=>{ dstate.journal.splice(+b.dataset.i,1); saveDisc(); renderJournal(); computeDD(); }));
 }
 $("jAdd").addEventListener("click",()=>{
   const rec={date:$("jDate").value||new Date().toISOString().slice(0,10), sym:$("jSym").value.trim(),
-             act:$("jAct").value, price:$("jPrice").value, qty:$("jQty").value, note:$("jNote").value.trim()};
-  if(!rec.sym && !rec.price){ return; }
-  dstate.journal.unshift(rec); saveDisc(); renderJournal();
-  $("jSym").value=""; $("jPrice").value=""; $("jQty").value=""; $("jNote").value="";
+             act:$("jAct").value, price:$("jPrice").value, qty:$("jQty").value, pnl:$("jPnl").value, note:$("jNote").value.trim()};
+  if(!rec.sym && !rec.price && !rec.pnl){ return; }
+  dstate.journal.unshift(rec); saveDisc(); renderJournal(); computeDD();   // 新增損益後重算斷路器
+  $("jSym").value=""; $("jPrice").value=""; $("jQty").value=""; $("jPnl").value=""; $("jNote").value="";
 });
-$("jClear").addEventListener("click",()=>{ if(confirm("確定清空所有交易日誌?")){ dstate.journal=[]; saveDisc(); renderJournal(); } });
+$("jClear").addEventListener("click",()=>{ if(confirm("確定清空所有交易日誌?")){ dstate.journal=[]; saveDisc(); renderJournal(); computeDD(); } });
 $("jExport").addEventListener("click",()=>{
-  const rows=[["日期","代碼","動作","價格","股數","理由/心得"]].concat(dstate.journal.map(r=>[r.date,r.sym,r.act,r.price,r.qty,r.note]));
+  const rows=[["日期","代碼","動作","價格","股數","損益","理由/心得"]].concat(dstate.journal.map(r=>[r.date,r.sym,r.act,r.price,r.qty,r.pnl,r.note]));
   const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c==null?"":c).replace(/"/g,'""')+'"').join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="trade_journal.csv"; a.click();
 });
 
 renderChk();
-bindNum("ddPeak",dstate.dd,"peak",computeDD); bindNum("ddNow",dstate.dd,"now",computeDD);
-bindNum("ddLimit",dstate.dd,"limit",computeDD); bindNum("ddPause",dstate.dd,"pause",computeDD); computeDD();
-bindNum("psAcct",dstate.ps,"acct",computePS); bindNum("psRisk",dstate.ps,"risk",computePS);
-bindNum("psEntry",dstate.ps,"entry",computePS); bindNum("psStop",dstate.ps,"stop",computePS); computePS();
+bindNum("ddAcct",dstate.dd,"acct",computeDD); bindNum("ddDaily",dstate.dd,"daily",computeDD);
+bindNum("ddWeekly",dstate.dd,"weekly",computeDD); bindNum("ddMonthly",dstate.dd,"monthly",computeDD);
+bindNum("ddStreak",dstate.dd,"streak",computeDD); computeDD();
+"psAcct|acct,psRisk|risk,psEntry|entry,psStop|stop,psAtr|atr,psAtrMult|atrMult,psWin|win,psAvgWin|avgWin,psAvgLoss|avgLoss,psMaxPos|maxPos,psMaxSector|maxSector,psCurSector|curSector".split(",").forEach(s=>{ const p=s.split("|"); bindNum(p[0],dstate.ps,p[1],computePS); });
+renderPsMethod(); togglePsFields(); computePS();
 if(!$("jDate").value) $("jDate").value=new Date().toISOString().slice(0,10);
 renderJournal();
+function computeMB(){
+  const p=parseFloat($("mbPct").value), el=$("mbStatus");
+  if(isNaN(p)){ el.className="big-rec muted"; el.style.color=""; el.textContent="輸入目前站上 200 日線的比例。"; return; }
+  let zone,color;
+  if(p>=60){zone="健康 Healthy";color="var(--green)";}
+  else if(p>=45){zone="中性 Neutral";color="";}
+  else if(p>=30){zone="轉弱 Weak";color="var(--amber)";}
+  else{zone="危險 Critical";color="var(--red)";}
+  el.className="big-rec"+(p>=60?" pos":""); el.style.color=color;
+  el.textContent="寬度 "+p+"% → "+zone+(p<45?" — 多數股票沒跟上,留意風險":"");
+}
+bindNum("mbPct",dstate.mb,"pct",computeMB); computeMB();
 try{ if(localStorage.getItem("xdxm_tab")==="disc") showTab("disc"); }catch(e){}
 </script>
 </body>
