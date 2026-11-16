@@ -8,3 +8,6 @@ Thumbs.db
 .wrangler/
 node_modules/
 *.pyc
+
+# 交接文件,不推送 GitHub
+SKILL.md
