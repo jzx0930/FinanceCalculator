@@ -81,7 +81,9 @@
   .rlink a{color:var(--accent);text-decoration:none;padding:4px 10px}
   .rlink a:hover{text-decoration:underline}
   .rlink button{background:transparent;color:var(--green);border:0;border-left:1px solid var(--line);padding:4px 9px;font-weight:700;cursor:pointer}
-  a.btnlink{display:inline-block;color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:10px 18px;font-weight:600;text-decoration:none;font-size:15px}
+  .rsteps{margin:0;padding-left:20px;font-size:13px;line-height:1.6}
+  .rsteps li{margin:8px 0}
+  .rsteps button{padding:7px 14px;font-size:14px}
   .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--mut)}
   .tabs{display:flex;gap:8px;margin:6px 0 18px}
   .tab{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:9px 18px;font-size:15px;font-weight:700;cursor:pointer}
@@ -391,14 +393,16 @@
         <div style="font-weight:700;margin-bottom:4px">🔎 資料來源小幫手(免費)</div>
         <div class="muted" style="font-size:12px;margin-bottom:6px">① 依「標的」自動產生查詢連結:點名稱開網頁,點「＋」把該來源加進「資料來源」欄。</div>
         <div id="rLinks" class="rlinks"><span class="muted" style="font-size:13px">先填「標的」代碼(台股數字或美股代號)。</span></div>
-        <div class="muted" style="font-size:12px;margin:12px 0 6px">② 讓 Claude 幫你上網找:按「複製研究需求」→ 貼到 Claude 對話 → 把 Claude 回覆整段貼到下面 → 按「套用到表單」。用你現有的 Claude 訂閱,不另收費。</div>
-        <div class="toolbar" style="margin-top:0">
-          <button class="ghost" id="rCopyReq">📋 複製研究需求</button>
-          <a class="ghost btnlink" href="https://claude.ai/new" target="_blank" rel="noopener">開啟 Claude ↗</a>
-        </div>
-        <textarea id="rPaste" rows="4" style="margin-top:8px" placeholder="把 Claude 回覆貼在這裡(含【資料來源】【失效條件】【結論】【研究路徑】等段落)"></textarea>
-        <div class="toolbar"><button class="ghost" id="rApply">套用到表單</button></div>
+        <div style="font-weight:700;margin:14px 0 6px">🤖 讓 Claude 幫你上網找(只要按 2 個按鈕)</div>
+        <ol class="rsteps">
+          <li><button id="rAsk">① 問 Claude</button> <span class="muted">→ 自動開新分頁,問題已經幫你打好,在 Claude 按<b>送出</b>(若框內空白就按 <b>Ctrl+V</b> 再送出)。</span></li>
+          <li><span class="muted">等 Claude 回答完,按回答最下面的<b>「複製」圖示</b> 📋。</span></li>
+          <li><button id="rPasteBtn">② 貼上 Claude 回覆</button> <span class="muted">→ 回到這頁按它,資料來源/失效條件/結論/研究路徑會<b>自動填好</b>。</span></li>
+        </ol>
         <div class="err" id="rHelpMsg" style="margin-top:6px"></div>
+        <details style="margin-top:8px"><summary class="muted" style="font-size:12px;cursor:pointer">按 ② 沒反應?改成手動貼上</summary>
+          <textarea id="rPaste" rows="4" style="margin-top:6px" placeholder="在這裡按 Ctrl+V 貼上 Claude 的回覆,會自動填入"></textarea>
+        </details>
       </div>
       <div style="margin-top:10px">
         <label>人工風險確認(下單前由人確認)</label>
@@ -1010,7 +1014,10 @@ function showTab(which){
   if(!TABS[which]) which="calc";
   Object.entries(TABS).forEach(([k,[pane,btn]])=>{ $(pane).classList.toggle("hide",k!==which); $(btn).classList.toggle("on",k===which); });
   try{ localStorage.setItem("xdxm_tab", which); }catch(e){}
-  if(which==="res" && typeof renderResearch==="function") renderResearch();
+  if(which==="res" && typeof renderResearch==="function"){
+    renderResearch();
+    const rs=$("rSym"), s=$("symbol"); if(rs && s && !rs.value.trim() && s.value.trim()){ rs.value=s.value.trim(); renderSrcLinks(); }
+  }
 }
 Object.entries(TABS).forEach(([k,[,btn]])=>$(btn).addEventListener("click",()=>showTab(k)));
 
@@ -1331,17 +1338,20 @@ function buildResearchRequest(){
   L.push("(建議的研究順序,每行一步)");
   return L.join("\n");
 }
-async function copyText(t){
-  try{ await navigator.clipboard.writeText(t); return true; }catch(e){}
+function copySync(t){   // 同步複製:要在 window.open 之前做,否則焦點移走會失敗
   try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
        document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); ta.remove(); return ok; }catch(e){ return false; }
 }
-$("rCopyReq").addEventListener("click",async()=>{
-  const m=$("rHelpMsg");
-  if(!$("rSym").value.trim()){ m.style.color=""; m.textContent="先填「標的」再複製需求。"; return; }
+function rHelp(ok,msg){ const m=$("rHelpMsg"); m.style.color=ok?"var(--green)":""; m.textContent=msg; }
+$("rAsk").addEventListener("click",()=>{
+  if(!$("rSym").value.trim() && $("symbol").value.trim()){ $("rSym").value=$("symbol").value.trim(); renderSrcLinks(); }
+  if(!$("rSym").value.trim()){ rHelp(false,"先在上面「標的」填代碼(例如 0050)。"); $("rSym").focus(); return; }
   const t=buildResearchRequest();
-  if(await copyText(t)){ m.style.color="var(--green)"; m.textContent="✅ 已複製研究需求。貼到 Claude 對話,等它回覆後把整段貼到下面。"; }
-  else { $("rPaste").value=t; m.style.color=""; m.textContent="瀏覽器不允許自動複製,需求已放在下方框內,請手動全選複製(貼回結果前先清空)。"; }
+  const copied=copySync(t);
+  const w=window.open("https://claude.ai/new?q="+encodeURIComponent(t),"_blank");
+  try{ if(w) w.opener=null; }catch(e){}
+  rHelp(true,(w===null?"⚠️ 瀏覽器擋了新分頁,請自己開 claude.ai 。":"✅ 已開啟 Claude,問題已帶入,按送出即可。")+
+             (copied?"(問題也已複製,框內若空白按 Ctrl+V)":"")+" 回答完按「複製」,再回來按 ②。");
 });
 
 const R_SEC={"資料來源":"rSrc","失效條件":"rInval","結論":"rConc","研究路徑":"rPath"};
@@ -1357,21 +1367,33 @@ function parseClaudeReply(text){
   });
   return out;
 }
-$("rApply").addEventListener("click",()=>{
-  const m=$("rHelpMsg"), txt=$("rPaste").value;
-  if(!txt.trim()){ m.style.color=""; m.textContent="先把 Claude 的回覆貼到框內。"; return; }
+function applyClaudeReply(txt){
+  if(!txt||!txt.trim()){ rHelp(false,"剪貼簿是空的。請先在 Claude 回答下方按「複製」。"); return false; }
+  if(/請幫我上網搜尋並整理以下股票研究/.test(txt) && !/https?:\/\//.test(txt)){
+    rHelp(false,"剪貼簿裡還是「問題」本身。請等 Claude 回答完,按回答下方的「複製」,再按 ②。"); return false; }
   const p=parseClaudeReply(txt), done=[];
   Object.keys(R_SEC).forEach(k=>{
     if(!p[k]) return;
     const el=$(R_SEC[k]);
     if(k==="資料來源"){ p[k].split("\n").forEach(addSrcLine); }
-    else { const v=el.value.trim(); el.value=v?v+"\n"+p[k]:p[k]; }
+    else { const v=el.value.trim(); if(!v.includes(p[k])) el.value=v?v+"\n"+p[k]:p[k]; }
     done.push(k);
   });
-  if(!done.length){ m.style.color=""; m.textContent="找不到【資料來源】【失效條件】等段落標記;請確認貼的是 Claude 按格式回覆的內容。"; return; }
-  $("rPaste").value="";
-  m.style.color="var(--green)"; m.textContent="✅ 已填入:"+done.join("、")+"。請自己看過、刪掉不需要的,再按「儲存論點」。";
+  if(!done.length){ rHelp(false,"找不到【資料來源】【失效條件】等段落。請確認複製的是 Claude 的回答。"); return false; }
+  rHelp(true,"✅ 已自動填入:"+done.join("、")+"。請看過、刪掉不需要的,勾好風險確認,再按「儲存論點」。");
+  $("rSrc").scrollIntoView({behavior:"smooth",block:"center"});
+  return true;
+}
+$("rPasteBtn").addEventListener("click",async()=>{
+  let txt=null;
+  try{ txt=await navigator.clipboard.readText(); }catch(e){}
+  if(txt===null){
+    const d=$("rPaste").closest("details"); if(d) d.open=true; $("rPaste").focus();
+    rHelp(false,"瀏覽器沒讓網頁讀剪貼簿(可能按了封鎖)。請在下方框內按 Ctrl+V,會自動填入。"); return;
+  }
+  applyClaudeReply(txt);
 });
+$("rPaste").addEventListener("paste",()=>setTimeout(()=>{ if(applyClaudeReply($("rPaste").value)) $("rPaste").value=""; },0));
 renderSrcLinks();
 $("rExport").addEventListener("click",()=>{
   const head=["日期","標的","結論類型","狀態","研究目標","研究路徑","資料來源","結論","失效條件","人工風險確認","檢討"];
