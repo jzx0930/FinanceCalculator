@@ -70,7 +70,12 @@
   .toolbar{display:flex;gap:8px;margin-top:10px}
   .hide{display:none}
   a{color:var(--accent)}
-  select{background:#0e1620;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 11px;font-size:15px;width:100%}
+  select,textarea{background:#0e1620;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 11px;font-size:15px;width:100%;font-family:inherit}
+  textarea{resize:vertical;font-size:14px}
+  .rcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .rcard .rh{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .rcard .rb{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.7;white-space:pre-wrap}
+  .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--mut)}
   .tabs{display:flex;gap:8px;margin:6px 0 18px}
   .tab{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:9px 18px;font-size:15px;font-weight:700;cursor:pointer}
   .tab.on{background:var(--accent);color:#04121f;border-color:var(--accent)}
@@ -92,6 +97,7 @@
   <div class="tabs">
     <button class="tab on" id="tabBtnCalc">加碼試算</button>
     <button class="tab" id="tabBtnDisc">交易紀律</button>
+    <button class="tab" id="tabBtnRes">研究日誌</button>
   </div>
 
   <div id="tabCalc">
@@ -339,7 +345,83 @@
       </div>
     </div>
 
-  </div>
+  </div><!-- /tabDiscipline -->
+
+  <div id="tabResearch" class="hide">
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">🛡 研究護欄(AI/工具負責研究,人負責風險)</label>
+      <div class="chklist" style="margin-top:6px">
+        <label><span class="ci">① 資料來源要可追溯 ─ 每個論點都要寫出用了哪些資料、從哪來</span></label>
+        <label><span class="ci">② 結論一定要附「失效條件」─ 什麼情況發生就代表這個論點錯了</span></label>
+        <label><span class="ci">③ 不自動下單、不繞過風控 ─ 論點只是研究,下單前仍要過「交易紀律」分頁的檢查與斷路器</span></label>
+        <label><span class="ci">④ 不碰設定之外的資金 ─ 下面設定可動用資金上限,超過就警示</span></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div style="max-width:260px"><label>此策略可動用資金上限</label><input id="rgCap" type="number" placeholder="例如 300000"></div>
+      </div>
+      <div class="big-rec" id="rgStatus" style="margin-top:10px">—</div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">📝 新增研究論點</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 10px">記下這次的研究目標、路徑、資料來源與結論。<b>資料來源</b>與<b>失效條件</b>沒填不能存。</div>
+      <div class="row">
+        <div style="max-width:140px"><label>標的</label><input id="rSym" placeholder="2330"></div>
+        <div style="max-width:170px"><label>結論類型</label>
+          <select id="rType"><option>短線觀察</option><option>波段潛力</option><option>長期持有</option><option>不碰/排除</option><option>資料不足待補</option></select></div>
+        <div style="flex:2;min-width:220px"><label>研究目標 / 假設</label><input id="rGoal" placeholder="例:驗證法說後毛利率是否真的回升"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div style="min-width:260px"><label>研究路徑(依序做了什麼)</label><textarea id="rPath" rows="3" placeholder="1. 看籌碼 2. 翻財報 3. 查產業鏈 4. 回頭找資料矛盾…"></textarea></div>
+        <div style="min-width:260px"><label>資料來源(必填,可追溯)</label><textarea id="rSrc" rows="3" placeholder="例:公開資訊觀測站 Q3 財報、證交所三大法人、法說會簡報…"></textarea></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div style="min-width:260px"><label>結論</label><textarea id="rConc" rows="2" placeholder="這次研究的結論與理由"></textarea></div>
+        <div style="min-width:260px"><label>失效條件(必填)</label><textarea id="rInval" rows="2" placeholder="例:跌破季線且三大法人連賣 5 天;下季毛利率 < 50%"></textarea></div>
+      </div>
+      <div style="margin-top:10px">
+        <label>人工風險確認(下單前由人確認)</label>
+        <div class="chips" style="gap:14px">
+          <label class="chk" style="margin:0"><input type="checkbox" id="rRk1"> 已看週線/月線趨勢</label>
+          <label class="chk" style="margin:0"><input type="checkbox" id="rRk2"> 已標關鍵價位</label>
+          <label class="chk" style="margin:0"><input type="checkbox" id="rRk3"> 已想好資金控管</label>
+          <label class="chk" style="margin:0"><input type="checkbox" id="rRk4"> 已設停損</label>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="rSave">儲存論點</button>
+        <button class="ghost" id="rFill">帶入「加碼試算」目前代碼</button>
+      </div>
+      <div class="err" id="rMsg" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">🔁 學習回饋(下次研究前先看)</label>
+      <div class="muted" style="font-size:12px;margin:4px 0 8px">把過去被推翻的論點與失敗原因整理在這,下次研究時先避開同樣的坑、調整研究順序。</div>
+      <div class="sumline" id="rStats"></div>
+      <div id="rLessons" style="margin-top:10px;font-size:14px;line-height:1.7"></div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:15px;font-weight:700;color:var(--fg)">📚 研究論點清單</label>
+      <div class="chips" id="rFilter" style="margin-top:6px"></div>
+      <div id="rList" style="margin-top:10px"></div>
+      <div class="muted" id="rEmpty" style="font-size:13px;margin-top:6px">還沒有研究論點。</div>
+      <div class="toolbar">
+        <button class="ghost" id="rExport">匯出 CSV</button>
+        <button class="ghost" id="rClear">清空全部論點</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="disc">
+        此分頁的概念整理自 Threads 一篇討論「讓 AI 自己決定研究路徑」的貼文:研究要記錄路徑、假設、錯誤與失敗原因供下次調整;結論要附失效條件;資料要可追溯;不自動下單、不繞過風控、不碰設定外資金;AI 負責研究,人負責風險。
+        這裡只實作其中「研究紀錄與護欄」的部分(原文的自主研究 AI 系統無法在網頁內重現)。資料只存在你的瀏覽器,<b>非投資建議</b>。
+      </div>
+    </div>
+
+  </div><!-- /tabResearch -->
 </div>
 
 <script>
@@ -883,32 +965,34 @@ const DEFAULT_CHECK=[   // 對齊 pre-trade-discipline-gate 的實際關卡
   "部位大小在計畫內",
   "實際風險金額 ≤ 當初計畫的風險金額",
   "不是在剛虧損後的『復仇』情緒窗口內",
-  "回撤斷路器目前未觸發(未 HALTED / 冷卻)"
+  "回撤斷路器目前未觸發(未 HALTED / 冷卻)",
+  "已看週線/月線趨勢與關鍵價位(工具負責研究,人負責風險)",
+  "這筆有對應的研究論點,而且它的失效條件尚未觸發"
 ];
-const OLD_CHECK=JSON.stringify([
-  "這筆是計畫內的加碼/進場,不是臨時起意","已確認標的基本面與近期新聞沒有重大利空",
-  "投入金額在我設定的級距與資金上限內","不是在恐慌或貪婪的情緒下做的決定",
-  "這檔加上總部位沒有過度集中","已想好停損或續跌時的下一步"
-]);
+const OLD_CHECKS=[   // 仍停在舊預設清單者 → 自動升級(自訂過的不動)
+  JSON.stringify(["這筆是計畫內的加碼/進場,不是臨時起意","已確認標的基本面與近期新聞沒有重大利空",
+    "投入金額在我設定的級距與資金上限內","不是在恐慌或貪婪的情緒下做的決定",
+    "這檔加上總部位沒有過度集中","已想好停損或續跌時的下一步"]),
+  JSON.stringify(["進場點已寫在我的交易計畫裡(不是臨時起意)","停損價已事先設定好","部位大小在計畫內",
+    "實際風險金額 ≤ 當初計畫的風險金額","不是在剛虧損後的『復仇』情緒窗口內","回撤斷路器目前未觸發(未 HALTED / 冷卻)"])
+];
 let dstate=loadDisc();
 function loadDisc(){
   let s={}; try{ s=JSON.parse(localStorage.getItem(DS_LS))||{}; }catch(e){}
   let check=(s.check&&s.check.length)?s.check:null;
-  if(check && JSON.stringify(check)===OLD_CHECK) check=null;   // 舊預設清單 → 自動升級
+  if(check && OLD_CHECKS.includes(JSON.stringify(check))) check=null;   // 舊預設清單 → 自動升級
   return { check:check||DEFAULT_CHECK.slice(), dd:s.dd||{}, ps:s.ps||{}, journal:s.journal||[], mb:s.mb||{} };
 }
 function saveDisc(){ try{ localStorage.setItem(DS_LS, JSON.stringify(dstate)); }catch(e){} }
 
+const TABS={calc:["tabCalc","tabBtnCalc"], disc:["tabDiscipline","tabBtnDisc"], res:["tabResearch","tabBtnRes"]};
 function showTab(which){
-  const calc=which!=="disc";
-  $("tabCalc").classList.toggle("hide",!calc);
-  $("tabDiscipline").classList.toggle("hide",calc);
-  $("tabBtnCalc").classList.toggle("on",calc);
-  $("tabBtnDisc").classList.toggle("on",!calc);
-  try{ localStorage.setItem("xdxm_tab", calc?"calc":"disc"); }catch(e){}
+  if(!TABS[which]) which="calc";
+  Object.entries(TABS).forEach(([k,[pane,btn]])=>{ $(pane).classList.toggle("hide",k!==which); $(btn).classList.toggle("on",k===which); });
+  try{ localStorage.setItem("xdxm_tab", which); }catch(e){}
+  if(which==="res" && typeof renderResearch==="function") renderResearch();
 }
-$("tabBtnCalc").addEventListener("click",()=>showTab("calc"));
-$("tabBtnDisc").addEventListener("click",()=>showTab("disc"));
+Object.entries(TABS).forEach(([k,[,btn]])=>$(btn).addEventListener("click",()=>showTab(k)));
 
 // ① 下單前紀律檢查
 let chkState=[];
@@ -1053,7 +1137,110 @@ function computeMB(){
   el.textContent="寬度 "+p+"% → "+zone+(p<45?" — 多數股票沒跟上,留意風險":"");
 }
 bindNum("mbPct",dstate.mb,"pct",computeMB); computeMB();
-try{ if(localStorage.getItem("xdxm_tab")==="disc") showTab("disc"); }catch(e){}
+
+/* ===================== 研究日誌分頁 ===================== */
+const RS_LS="xdxm_research_v1";
+const R_STATUS=["研究中","觀察中","已驗證","已失效"];
+const R_COLOR={"研究中":"var(--accent)","觀察中":"var(--amber)","已驗證":"var(--green)","已失效":"var(--red)"};
+let rstate=(function(){ let s={}; try{ s=JSON.parse(localStorage.getItem(RS_LS))||{}; }catch(e){}
+  return {items:s.items||[], cap:s.cap||"", filter:s.filter||"all"}; })();
+function saveRes(){ try{ localStorage.setItem(RS_LS, JSON.stringify(rstate)); }catch(e){} }
+const escH=s=>(s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+// 護欄:不碰設定之外的資金(檢查「加碼試算」總資金是否超過上限)
+function renderGuard(){
+  const cap=parseFloat($("rgCap").value), used=parseFloat($("capital").value)||0, el=$("rgStatus");
+  const over=cap>0 && used>cap;
+  $("capital").style.borderColor=over?"var(--red)":"";
+  $("capital").title=over?("超過研究日誌設定的可動用資金上限 "+fmt(cap,0)):"";
+  if(!(cap>0)){ el.className="big-rec muted"; el.style.color=""; el.textContent="設定上限後,會檢查「加碼試算」的總資金有沒有超出。"; return; }
+  if(over){ el.className="big-rec"; el.style.color="var(--red)";
+    el.innerHTML="⛔ 「加碼試算」總資金 "+fmt(used,0)+" 超過上限 "+fmt(cap,0)+" → <b>請調低,不碰設定之外的資金</b>"; }
+  else{ el.className="big-rec pos"; el.style.color="";
+    el.textContent="✅ 「加碼試算」總資金 "+fmt(used,0)+" 在上限 "+fmt(cap,0)+" 內(尚餘 "+fmt(cap-used,0)+")"; }
+}
+
+function renderLessons(){
+  const it=rstate.items, cnt=s=>it.filter(x=>x.status===s).length;
+  const closed=cnt("已驗證")+cnt("已失效"), rate=closed?Math.round(cnt("已驗證")/closed*100):null;
+  const noRev=it.filter(x=>x.status==="已失效"&&!x.review).length;
+  $("rStats").innerHTML=
+    '<div class="q"><span class="k">論點總數</span><span class="v">'+it.length+'</span></div>'+
+    '<div class="q"><span class="k">已驗證</span><span class="v pos">'+cnt("已驗證")+'</span></div>'+
+    '<div class="q"><span class="k">已失效</span><span class="v" style="color:var(--red)">'+cnt("已失效")+'</span></div>'+
+    '<div class="q"><span class="k">驗證率(已結案)</span><span class="v">'+(rate==null?"—":rate+"%")+'</span></div>'+
+    '<div class="q"><span class="k">失效但未檢討</span><span class="v" style="color:var(--amber)">'+noRev+'</span></div>';
+  const les=it.filter(x=>x.review).slice(0,8);
+  $("rLessons").innerHTML=les.length
+    ? les.map(x=>'・<b>'+escH(x.sym)+'</b>('+escH(x.status)+'):'+escH(x.review)).join("<br>")
+    : '<span class="muted">還沒有檢討紀錄。論點被推翻(改成「已失效」)時寫下失敗原因,下次研究前會列在這裡。</span>';
+}
+
+function renderResearch(){
+  renderGuard();
+  const fb=$("rFilter"); fb.innerHTML="";
+  [["all","全部"]].concat(R_STATUS.map(s=>[s,s])).forEach(([k,l])=>{
+    const n=k==="all"?rstate.items.length:rstate.items.filter(x=>x.status===k).length;
+    const b=document.createElement("button"); b.className="chip"+(rstate.filter===k?" on":""); b.textContent=l+" ("+n+")";
+    b.addEventListener("click",()=>{ rstate.filter=k; saveRes(); renderResearch(); }); fb.appendChild(b);
+  });
+  const list=$("rList"); list.innerHTML="";
+  const items=rstate.items.filter(x=>rstate.filter==="all"||x.status===rstate.filter);
+  $("rEmpty").style.display=items.length?"none":"block";
+  items.forEach(it=>{
+    const d=document.createElement("div"); d.className="rcard";
+    const c=R_COLOR[it.status]||"", rk=(it.risk||[]).filter(Boolean).length;
+    d.innerHTML=
+      '<div class="rh"><b>'+escH(it.sym)+'</b><span class="tag">'+escH(it.type)+'</span>'+
+      '<span class="tag" style="color:'+c+';border-color:'+c+'">'+escH(it.status)+'</span>'+
+      '<span class="muted" style="font-size:12px">'+escH(it.date)+' ・ 人工風險確認 '+rk+'/4</span>'+
+      '<select class="rst" style="width:auto;margin-left:auto;padding:4px 8px;font-size:13px">'+
+        R_STATUS.map(s=>'<option'+(s===it.status?' selected':'')+'>'+s+'</option>').join("")+'</select>'+
+      '<button class="ghost rdel" style="padding:3px 9px">✕</button></div>'+
+      '<div class="rb">'+
+        (it.goal?'<b>目標:</b>'+escH(it.goal)+'\n':'')+
+        (it.path?'<b>路徑:</b>'+escH(it.path)+'\n':'')+
+        '<b>資料來源:</b>'+escH(it.src)+'\n'+
+        (it.conc?'<b>結論:</b>'+escH(it.conc)+'\n':'')+
+        '<b style="color:var(--amber)">失效條件:</b>'+escH(it.inval)+
+      '</div>'+
+      '<div style="margin-top:8px"><label style="font-size:12px">檢討(錯誤/失敗原因、下次研究順序怎麼調)</label>'+
+      '<textarea class="rrev" rows="2" placeholder="例:只看籌碼沒先翻財報;下次先查財報與產業鏈矛盾,再看籌碼">'+escH(it.review)+'</textarea></div>';
+    d.querySelector(".rst").addEventListener("change",e=>{ it.status=e.target.value; saveRes(); renderResearch(); });
+    d.querySelector(".rdel").addEventListener("click",()=>{ if(confirm("刪除這個論點?")){ rstate.items=rstate.items.filter(x=>x.id!==it.id); saveRes(); renderResearch(); } });
+    d.querySelector(".rrev").addEventListener("change",e=>{ it.review=e.target.value; saveRes(); renderLessons(); });
+    list.appendChild(d);
+  });
+  renderLessons();
+}
+
+$("rSave").addEventListener("click",()=>{
+  const g=id=>$(id).value.trim();
+  const it={id:Date.now(), date:new Date().toISOString().slice(0,10), sym:g("rSym"), type:$("rType").value, goal:g("rGoal"),
+            path:g("rPath"), src:g("rSrc"), conc:g("rConc"), inval:g("rInval"),
+            risk:[1,2,3,4].map(i=>$("rRk"+i).checked), status:"研究中", review:""};
+  const miss=[]; if(!it.sym) miss.push("標的"); if(!it.src) miss.push("資料來源"); if(!it.inval) miss.push("失效條件");
+  if(miss.length){ $("rMsg").style.color=""; $("rMsg").textContent="⛔ 護欄:"+miss.join("、")+" 必填,補上才能存。"; return; }
+  rstate.items.unshift(it); saveRes();
+  ["rGoal","rPath","rSrc","rConc","rInval"].forEach(id=>$(id).value=""); [1,2,3,4].forEach(i=>$("rRk"+i).checked=false);
+  $("rMsg").style.color="var(--green)"; $("rMsg").textContent="✅ 已存。下單前記得仍要過「交易紀律」分頁的檢查。";
+  if(rstate.filter!=="all"&&rstate.filter!=="研究中"){ rstate.filter="all"; saveRes(); }
+  renderResearch();
+});
+$("rFill").addEventListener("click",()=>{ $("rSym").value=$("symbol").value.trim(); });
+$("rExport").addEventListener("click",()=>{
+  const head=["日期","標的","結論類型","狀態","研究目標","研究路徑","資料來源","結論","失效條件","人工風險確認","檢討"];
+  const rows=[head].concat(rstate.items.map(x=>[x.date,x.sym,x.type,x.status,x.goal,x.path,x.src,x.conc,x.inval,(x.risk||[]).filter(Boolean).length+"/4",x.review]));
+  const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c==null?"":c).replace(/"/g,'""')+'"').join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="research_log.csv"; a.click();
+});
+$("rClear").addEventListener("click",()=>{ if(confirm("確定清空所有研究論點?")){ rstate.items=[]; saveRes(); renderResearch(); } });
+$("rgCap").value=rstate.cap||"";
+$("rgCap").addEventListener("input",()=>{ rstate.cap=$("rgCap").value; saveRes(); renderGuard(); });
+$("capital").addEventListener("input",renderGuard);
+renderResearch();
+
+try{ const t=localStorage.getItem("xdxm_tab"); if(t && t!=="calc") showTab(t); }catch(e){}
 </script>
 </body>
 </html>
