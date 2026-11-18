@@ -75,6 +75,13 @@
   .rcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
   .rcard .rh{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .rcard .rb{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.7;white-space:pre-wrap}
+  .rhelp{margin-top:12px;border:1px dashed var(--line);border-radius:10px;padding:12px 14px}
+  .rlinks{display:flex;flex-wrap:wrap;gap:8px}
+  .rlink{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:13px}
+  .rlink a{color:var(--accent);text-decoration:none;padding:4px 10px}
+  .rlink a:hover{text-decoration:underline}
+  .rlink button{background:transparent;color:var(--green);border:0;border-left:1px solid var(--line);padding:4px 9px;font-weight:700;cursor:pointer}
+  a.btnlink{display:inline-block;color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:10px 18px;font-weight:600;text-decoration:none;font-size:15px}
   .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--mut)}
   .tabs{display:flex;gap:8px;margin:6px 0 18px}
   .tab{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:9px 18px;font-size:15px;font-weight:700;cursor:pointer}
@@ -379,6 +386,19 @@
       <div class="row" style="margin-top:8px">
         <div style="min-width:260px"><label>結論</label><textarea id="rConc" rows="2" placeholder="這次研究的結論與理由"></textarea></div>
         <div style="min-width:260px"><label>失效條件(必填)</label><textarea id="rInval" rows="2" placeholder="例:跌破季線且三大法人連賣 5 天;下季毛利率 < 50%"></textarea></div>
+      </div>
+      <div class="rhelp">
+        <div style="font-weight:700;margin-bottom:4px">🔎 資料來源小幫手(免費)</div>
+        <div class="muted" style="font-size:12px;margin-bottom:6px">① 依「標的」自動產生查詢連結:點名稱開網頁,點「＋」把該來源加進「資料來源」欄。</div>
+        <div id="rLinks" class="rlinks"><span class="muted" style="font-size:13px">先填「標的」代碼(台股數字或美股代號)。</span></div>
+        <div class="muted" style="font-size:12px;margin:12px 0 6px">② 讓 Claude 幫你上網找:按「複製研究需求」→ 貼到 Claude 對話 → 把 Claude 回覆整段貼到下面 → 按「套用到表單」。用你現有的 Claude 訂閱,不另收費。</div>
+        <div class="toolbar" style="margin-top:0">
+          <button class="ghost" id="rCopyReq">📋 複製研究需求</button>
+          <a class="ghost btnlink" href="https://claude.ai/new" target="_blank" rel="noopener">開啟 Claude ↗</a>
+        </div>
+        <textarea id="rPaste" rows="4" style="margin-top:8px" placeholder="把 Claude 回覆貼在這裡(含【資料來源】【失效條件】【結論】【研究路徑】等段落)"></textarea>
+        <div class="toolbar"><button class="ghost" id="rApply">套用到表單</button></div>
+        <div class="err" id="rHelpMsg" style="margin-top:6px"></div>
       </div>
       <div style="margin-top:10px">
         <label>人工風險確認(下單前由人確認)</label>
@@ -1227,7 +1247,132 @@ $("rSave").addEventListener("click",()=>{
   if(rstate.filter!=="all"&&rstate.filter!=="研究中"){ rstate.filter="all"; saveRes(); }
   renderResearch();
 });
-$("rFill").addEventListener("click",()=>{ $("rSym").value=$("symbol").value.trim(); });
+$("rFill").addEventListener("click",()=>{ $("rSym").value=$("symbol").value.trim(); renderSrcLinks(); });
+
+// ===== 資料來源小幫手(免費:查詢連結 + 複製需求給 Claude 對話)=====
+function srcLinks(raw){
+  let s=String(raw||"").trim().toUpperCase().replace(/\.(TWO|TW)$/,"");
+  if(!s) return null;
+  const e=encodeURIComponent;
+  if(/^\d{4,6}[A-Z]?$/.test(s)){            // 台股 / 台灣 ETF
+    return {mkt:"台股", sym:s, list:[
+      ["Goodinfo 個股總覽", "https://goodinfo.tw/tw/StockDetail.asp?STOCK_ID="+e(s)],
+      ["Goodinfo 法人買賣", "https://goodinfo.tw/tw/ShowBuySaleChart.asp?STOCK_ID="+e(s)+"&CHT_CAT=DATE"],
+      ["Yahoo 股市 新聞", "https://tw.stock.yahoo.com/quote/"+e(s)+"/news"],
+      ["Yahoo 股市 營收", "https://tw.stock.yahoo.com/quote/"+e(s)+"/revenue"],
+      ["鉅亨網 個股", "https://www.cnyes.com/twstock/"+e(s)],
+      ["公開資訊觀測站(財報/重訊)", "https://mops.twse.com.tw/mops/"],
+      ["Google 法說會簡報", "https://www.google.com/search?q="+e(s+" 法說會 簡報")],
+      ["Google 新聞", "https://news.google.com/search?q="+e(s+" 股")+"&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"],
+    ]};
+  }
+  if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)){     // 美股
+    return {mkt:"美股", sym:s, list:[
+      ["SEC EDGAR 財報(10-K/10-Q)", "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK="+e(s)+"&type=10-&dateb=&owner=include&count=40"],
+      ["Yahoo Finance", "https://finance.yahoo.com/quote/"+e(s)+"/"],
+      ["Yahoo Finance 財報", "https://finance.yahoo.com/quote/"+e(s)+"/financials/"],
+      ["Finviz", "https://finviz.com/quote.ashx?t="+e(s)],
+      ["Google 法說會逐字稿", "https://www.google.com/search?q="+e(s+" earnings call transcript")],
+      ["Google 新聞", "https://news.google.com/search?q="+e(s+" stock")+"&hl=en-US&gl=US&ceid=US:en"],
+    ]};
+  }
+  return null;
+}
+function addSrcLine(line){
+  const t=$("rSrc"); const v=t.value.replace(/\s+$/,"");
+  if(v.split("\n").some(x=>x.trim()===line)) return false;
+  t.value=(v?v+"\n":"")+line; return true;
+}
+function renderSrcLinks(){
+  const box=$("rLinks"), r=srcLinks($("rSym").value);
+  box.innerHTML="";
+  if(!r){ box.innerHTML='<span class="muted" style="font-size:13px">先填「標的」代碼(台股數字或美股代號)。</span>'; return; }
+  r.list.forEach(([name,url])=>{
+    const w=document.createElement("span"); w.className="rlink";
+    const a=document.createElement("a"); a.href=url; a.target="_blank"; a.rel="noopener"; a.textContent=name;
+    const b=document.createElement("button"); b.type="button"; b.textContent="＋"; b.title="加入「資料來源」欄";
+    b.addEventListener("click",()=>{
+      const ok=addSrcLine(name+"("+new Date().toISOString().slice(0,10)+"):"+url);
+      $("rHelpMsg").style.color=ok?"var(--green)":""; $("rHelpMsg").textContent=ok?"✅ 已加入資料來源:"+name:"這筆已在資料來源裡。";
+    });
+    w.appendChild(a); w.appendChild(b); box.appendChild(w);
+  });
+}
+$("rSym").addEventListener("input",renderSrcLinks);
+
+function buildResearchRequest(){
+  const g=id=>$(id).value.trim(), r=srcLinks(g("rSym"));
+  const L=[];
+  L.push("請幫我上網搜尋並整理以下股票研究的資料來源(每筆請附可點擊網址與資料日期):");
+  L.push("- 標的:"+(g("rSym")||"(未填)")+(r?"("+r.mkt+")":""));
+  L.push("- 結論類型:"+$("rType").value);
+  if(g("rGoal")) L.push("- 研究目標/假設:"+g("rGoal"));
+  if(g("rPath")) L.push("- 我目前的研究路徑:"+g("rPath").replace(/\n/g," / "));
+  if(g("rSrc"))  L.push("- 我已有的資料來源:"+g("rSrc").replace(/\n/g," / "));
+  if(g("rConc")) L.push("- 目前初步結論:"+g("rConc"));
+  L.push("");
+  L.push("要求:");
+  L.push(r&&r.mkt==="美股"
+    ? "1. 優先一手資料:SEC 財報(10-K/10-Q/8-K)、公司財報新聞稿與法說會,其次可信財經媒體。"
+    : "1. 優先一手資料:公開資訊觀測站(財報、重大訊息、月營收)、證交所/櫃買中心、公司法說會簡報,其次可信財經媒體。");
+  L.push("2. 每筆來源格式:名稱(日期):重點一句 — 網址。只列真的查得到的,不要編造。");
+  L.push("3. 依資料建議 2~3 條可量化、可檢查的「失效條件」(例如價位、營收/毛利率門檻、法人連續賣超天數)。");
+  L.push("4. 指出資料之間的矛盾或不足,並建議下一步研究順序。");
+  L.push("5. 不要給買賣建議。");
+  L.push("");
+  L.push("最後請嚴格用以下格式輸出(我會整段貼回網頁自動填入):");
+  L.push("【資料來源】");
+  L.push("(每行一筆)");
+  L.push("【失效條件】");
+  L.push("(每行一條)");
+  L.push("【結論】");
+  L.push("(2~3 句)");
+  L.push("【研究路徑】");
+  L.push("(建議的研究順序,每行一步)");
+  return L.join("\n");
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){}
+  try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
+       document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); ta.remove(); return ok; }catch(e){ return false; }
+}
+$("rCopyReq").addEventListener("click",async()=>{
+  const m=$("rHelpMsg");
+  if(!$("rSym").value.trim()){ m.style.color=""; m.textContent="先填「標的」再複製需求。"; return; }
+  const t=buildResearchRequest();
+  if(await copyText(t)){ m.style.color="var(--green)"; m.textContent="✅ 已複製研究需求。貼到 Claude 對話,等它回覆後把整段貼到下面。"; }
+  else { $("rPaste").value=t; m.style.color=""; m.textContent="瀏覽器不允許自動複製,需求已放在下方框內,請手動全選複製(貼回結果前先清空)。"; }
+});
+
+const R_SEC={"資料來源":"rSrc","失效條件":"rInval","結論":"rConc","研究路徑":"rPath"};
+function parseClaudeReply(text){
+  const out={}, re=/【\s*(資料來源|失效條件|結論|研究路徑)\s*】/g;
+  const marks=[]; let m;
+  while((m=re.exec(text))) marks.push({k:m[1], s:m.index, e:re.lastIndex});
+  marks.forEach((mk,i)=>{
+    const body=text.slice(mk.e, i+1<marks.length?marks[i+1].s:text.length)
+      .split("\n").map(x=>x.replace(/\*\*/g,"").replace(/^\s*(?:[-*•]|\d+[.)、])\s*/,"").trim())
+      .filter(x=>x && !/^[#*>\s_-]*$/.test(x) && !/^[((](每行|2~3|建議的研究順序)/.test(x)).join("\n");
+    if(body) out[mk.k]=(out[mk.k]?out[mk.k]+"\n":"")+body;
+  });
+  return out;
+}
+$("rApply").addEventListener("click",()=>{
+  const m=$("rHelpMsg"), txt=$("rPaste").value;
+  if(!txt.trim()){ m.style.color=""; m.textContent="先把 Claude 的回覆貼到框內。"; return; }
+  const p=parseClaudeReply(txt), done=[];
+  Object.keys(R_SEC).forEach(k=>{
+    if(!p[k]) return;
+    const el=$(R_SEC[k]);
+    if(k==="資料來源"){ p[k].split("\n").forEach(addSrcLine); }
+    else { const v=el.value.trim(); el.value=v?v+"\n"+p[k]:p[k]; }
+    done.push(k);
+  });
+  if(!done.length){ m.style.color=""; m.textContent="找不到【資料來源】【失效條件】等段落標記;請確認貼的是 Claude 按格式回覆的內容。"; return; }
+  $("rPaste").value="";
+  m.style.color="var(--green)"; m.textContent="✅ 已填入:"+done.join("、")+"。請自己看過、刪掉不需要的,再按「儲存論點」。";
+});
+renderSrcLinks();
 $("rExport").addEventListener("click",()=>{
   const head=["日期","標的","結論類型","狀態","研究目標","研究路徑","資料來源","結論","失效條件","人工風險確認","檢討"];
   const rows=[head].concat(rstate.items.map(x=>[x.date,x.sym,x.type,x.status,x.goal,x.path,x.src,x.conc,x.inval,(x.risk||[]).filter(Boolean).length+"/4",x.review]));
